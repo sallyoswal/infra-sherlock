@@ -6,10 +6,20 @@ from pathlib import Path
 from dataclasses import asdict
 import hashlib
 import json
+from typing import Literal
 
 from incident_agent.loader import incident_dir, load_json
 from incident_agent.llm_provider import has_llm_credentials
-from incident_agent.models import IncidentMetadata, IncidentReport, NotificationPayload
+from incident_agent.models import (
+    DeployAnalysis,
+    IncidentMetadata,
+    IncidentReport,
+    InfraAnalysis,
+    LogAnalysis,
+    LogEvent,
+    MetricsAnalysis,
+    NotificationPayload,
+)
 from incident_agent.notifications.state_store import NotificationStateStore
 from incident_agent.plugins.base import IncidentContext, PluginEvidence
 from incident_agent.plugins.registry import (
@@ -35,44 +45,79 @@ def investigate_incident(
     routing_config_path: Path | None = None,
     notify: bool = False,
     state_path: Path | None = None,
+    investigation_mode: Literal["local", "cloud"] = "local",
+    service_name: str | None = None,
+    incident_title: str | None = None,
 ) -> IncidentReport:
     """Run AI-only investigation workflow."""
-    if datasets_root is None:
-        datasets_root = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
-
-    target_dir = incident_dir(datasets_root, incident_name)
-    metadata_json = load_json(target_dir / "metadata.json")
-    metadata = IncidentMetadata(
-        incident_name=metadata_json["incident_name"],
-        title=metadata_json["title"],
-        service_name=metadata_json["service_name"],
-    )
-
-    logs = analyze_logs(target_dir / "logs.jsonl")
-    metrics = analyze_metrics(target_dir / "metrics.csv")
-    deploys = analyze_deploys(target_dir / "deploy_history.json")
-    infra = analyze_infra_changes(target_dir / "infra_changes.json")
-
     if not has_llm_credentials():
         raise LLMReasonerError("AI-only mode requires LLM credentials for investigation.")
 
-    report = build_report_with_llm(
-        metadata=metadata,
-        logs=logs,
-        metrics=metrics,
-        deploys=deploys,
-        infra=infra,
-    )
-
     plugin_cfg = load_plugin_config(plugin_config_path)
-    collectors = build_collectors(plugin_cfg)
-    context = IncidentContext(
-        incident_name=incident_name,
-        service_name=metadata.service_name,
-        incident_dir=target_dir,
-    )
-    plugin_evidence = _collect_plugin_evidence(collectors, context)
-    _merge_plugin_evidence(report, plugin_evidence)
+
+    if investigation_mode == "cloud":
+        if not service_name:
+            raise LLMReasonerError("cloud mode requires service_name")
+
+        # Cloud mode must use collectors and must not rely on local dataset files.
+        plugin_cfg.mode = "cloud"
+        collectors = build_collectors(plugin_cfg)
+        if not collectors:
+            raise LLMReasonerError("cloud mode requires at least one configured collector plugin")
+
+        context = IncidentContext(
+            incident_name=incident_name,
+            service_name=service_name,
+            incident_dir=Path("."),
+        )
+        plugin_evidence = _collect_plugin_evidence(collectors, context)
+        logs, metrics, deploys, infra = _analyses_from_plugin_evidence(plugin_evidence)
+        metadata = IncidentMetadata(
+            incident_name=incident_name,
+            title=incident_title or f"Cloud incident: {incident_name}",
+            service_name=service_name,
+        )
+        report = build_report_with_llm(
+            metadata=metadata,
+            logs=logs,
+            metrics=metrics,
+            deploys=deploys,
+            infra=infra,
+        )
+        _merge_plugin_evidence(report, plugin_evidence)
+    else:
+        if datasets_root is None:
+            datasets_root = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
+
+        target_dir = incident_dir(datasets_root, incident_name)
+        metadata_json = load_json(target_dir / "metadata.json")
+        metadata = IncidentMetadata(
+            incident_name=metadata_json["incident_name"],
+            title=metadata_json["title"],
+            service_name=metadata_json["service_name"],
+        )
+
+        logs = analyze_logs(target_dir / "logs.jsonl")
+        metrics = analyze_metrics(target_dir / "metrics.csv")
+        deploys = analyze_deploys(target_dir / "deploy_history.json")
+        infra = analyze_infra_changes(target_dir / "infra_changes.json")
+
+        report = build_report_with_llm(
+            metadata=metadata,
+            logs=logs,
+            metrics=metrics,
+            deploys=deploys,
+            infra=infra,
+        )
+
+        collectors = build_collectors(plugin_cfg)
+        context = IncidentContext(
+            incident_name=incident_name,
+            service_name=metadata.service_name,
+            incident_dir=target_dir,
+        )
+        plugin_evidence = _collect_plugin_evidence(collectors, context)
+        _merge_plugin_evidence(report, plugin_evidence)
 
     if notify:
         _notify_if_needed(
@@ -83,6 +128,52 @@ def investigate_incident(
         )
 
     return report
+
+
+def _analyses_from_plugin_evidence(
+    evidence: PluginEvidence,
+) -> tuple[LogAnalysis, MetricsAnalysis, DeployAnalysis, InfraAnalysis]:
+    """Build minimal reasoner inputs from plugin evidence for cloud mode."""
+    combined = [item.lower() for item in evidence.key_evidence]
+    combined.extend(event.event.lower() for event in evidence.timeline_events)
+
+    timeout_samples = [
+        text for text in evidence.key_evidence if "timeout" in text.lower()
+    ][:3]
+    error_events = sum(
+        1 for text in combined if ("error" in text or "exception" in text or "fail" in text)
+    )
+    timeout_events = sum(1 for text in combined if "timeout" in text)
+
+    sorted_timeline = sorted(evidence.timeline_events, key=lambda e: e.timestamp)
+    first_ts = sorted_timeline[0].timestamp if sorted_timeline else None
+    last_ts = sorted_timeline[-1].timestamp if sorted_timeline else None
+
+    log_events: list[LogEvent] = []
+    for event in sorted_timeline:
+        lowered = event.event.lower()
+        level = "ERROR" if ("error" in lowered or "timeout" in lowered) else "INFO"
+        log_events.append(LogEvent(timestamp=event.timestamp, level=level, message=event.event))
+
+    logs = LogAnalysis(
+        total_events=len(log_events),
+        error_events=error_events,
+        db_timeout_events=timeout_events,
+        first_timestamp=first_ts,
+        last_timestamp=last_ts,
+        sample_timeout_messages=timeout_samples,
+        timeline_events=log_events,
+    )
+    metrics = MetricsAnalysis(
+        points=[],
+        error_rate_rising=error_events > 0,
+        latency_rising=timeout_events > 0,
+        peak_error_rate=float(error_events),
+        peak_p95_latency_ms=float(timeout_events * 100),
+    )
+    deploys = DeployAnalysis(records=[], latest_deploy=None)
+    infra = InfraAnalysis(changes=[], latest_change=None, high_risk_changes=[])
+    return logs, metrics, deploys, infra
 
 
 def _collect_plugin_evidence(collectors: list[object], context: IncidentContext) -> PluginEvidence:

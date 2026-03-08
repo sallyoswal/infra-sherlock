@@ -2,13 +2,13 @@ from cli.run_agent import main
 
 
 def test_cli_investigate_returns_success() -> None:
-    code = main(["investigate", "payments_db_timeout"])
+    code = main(["investigate", "payments_db_timeout", "--mode", "local"])
     assert code == 0
 
 
 def test_cli_investigate_writes_markdown_report(tmp_path) -> None:
     output_file = tmp_path / "report.md"
-    code = main(["investigate", "payments_db_timeout", "--output", str(output_file)])
+    code = main(["investigate", "payments_db_timeout", "--mode", "local", "--output", str(output_file)])
     assert code == 0
     assert output_file.exists()
     content = output_file.read_text(encoding="utf-8")
@@ -19,7 +19,7 @@ def test_cli_timeline_formatting_in_plain_output(monkeypatch, capsys) -> None:
     import cli.run_agent as run_agent_module
 
     monkeypatch.setattr(run_agent_module, "HAS_RICH", False)
-    code = run_agent_module.main(["investigate", "payments_db_timeout"])
+    code = run_agent_module.main(["investigate", "payments_db_timeout", "--mode", "local"])
     captured = capsys.readouterr()
 
     assert code == 0
@@ -33,6 +33,8 @@ def test_cli_quiet_with_output_writes_file_without_terminal_report(capsys, tmp_p
         [
             "investigate",
             "payments_db_timeout",
+            "--mode",
+            "local",
             "--output",
             str(output_file),
             "--quiet",
@@ -43,3 +45,8 @@ def test_cli_quiet_with_output_writes_file_without_terminal_report(capsys, tmp_p
     assert output_file.exists()
     assert "Incident:" not in captured.out
     assert "Markdown report written to" not in captured.out
+
+
+def test_cli_cloud_mode_requires_service_name() -> None:
+    code = main(["investigate", "prod-incident-1", "--mode", "cloud"])
+    assert code == 3

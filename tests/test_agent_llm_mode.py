@@ -4,6 +4,8 @@ import pytest
 
 from incident_agent import agent
 from incident_agent.models import IncidentReport, TimelineEvent
+from incident_agent.plugins.base import IncidentContext, PluginEvidence
+from incident_agent.plugins.registry import PluginConfig
 
 
 def _fake_llm_report() -> IncidentReport:
@@ -50,3 +52,48 @@ def test_agent_raises_when_llm_fails(monkeypatch) -> None:
 
     with pytest.raises(agent.LLMReasonerError):
         agent.investigate_incident("payments_db_timeout")
+
+
+def test_agent_cloud_mode_skips_local_dataset(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        agent,
+        "load_plugin_config",
+        lambda _: PluginConfig(mode="cloud", collectors=["aws_cloudwatch"], notifiers=[]),
+    )
+
+    class _FakeCollector:
+        def healthcheck(self) -> tuple[bool, str]:
+            return True, "ok"
+
+        def collect(self, context: IncidentContext) -> PluginEvidence:
+            assert context.service_name == "payments-api"
+            return PluginEvidence(
+                key_evidence=["CloudWatch: timeout spike observed"],
+                timeline_events=[
+                    TimelineEvent(
+                        timestamp="2026-03-08T14:05:00Z",
+                        event="ERROR timeout while processing payment",
+                        source="plugin:aws_cloudwatch",
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(agent, "build_collectors", lambda _: [_FakeCollector()])
+    monkeypatch.setattr(agent, "build_report_with_llm", lambda **_: _fake_llm_report())
+    monkeypatch.setattr(agent, "incident_dir", lambda *_: (_ for _ in ()).throw(AssertionError("local path used")))
+
+    report = agent.investigate_incident(
+        "prod-incident-1",
+        investigation_mode="cloud",
+        service_name="payments-api",
+    )
+    assert report.likely_root_cause == "Synthetic LLM root cause"
+
+
+def test_agent_cloud_mode_requires_service_name(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    with pytest.raises(agent.LLMReasonerError):
+        agent.investigate_incident("prod-incident-1", investigation_mode="cloud")

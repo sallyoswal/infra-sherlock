@@ -89,10 +89,28 @@ def build_parser() -> argparse.ArgumentParser:
     investigate_parser = subparsers.add_parser("investigate", help="Investigate an incident")
     investigate_parser.add_argument("incident_name", help="Incident scenario name")
     investigate_parser.add_argument(
+        "--mode",
+        choices=["local", "cloud"],
+        required=True,
+        help="Investigation mode: local reads dataset files; cloud uses configured collectors only.",
+    )
+    investigate_parser.add_argument(
+        "--service-name",
+        type=str,
+        default=None,
+        help="Required in cloud mode: service identifier used by collectors.",
+    )
+    investigate_parser.add_argument(
+        "--incident-title",
+        type=str,
+        default=None,
+        help="Optional in cloud mode: incident title override for report metadata.",
+    )
+    investigate_parser.add_argument(
         "--datasets-root",
         type=Path,
         default=Path(__file__).resolve().parents[1] / "datasets" / "incidents",
-        help="Path to incidents dataset root",
+        help="Path to incidents dataset root (local mode only)",
     )
     investigate_parser.add_argument(
         "--output",
@@ -120,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
             report = investigate_incident(
                 incident_name=args.incident_name,
                 datasets_root=args.datasets_root,
+                investigation_mode=args.mode,
+                service_name=args.service_name,
+                incident_title=args.incident_title,
             )
         except IncidentDataError as exc:
             print(f"Error: {exc}", file=sys.stderr)
