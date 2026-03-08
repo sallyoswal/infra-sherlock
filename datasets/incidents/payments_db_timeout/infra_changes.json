@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2026-03-06T09:58:00Z",
+    "component": "vpc-security-group/payments-db",
+    "change_type": "ingress_update",
+    "risk_level": "high",
+    "details": "Restricted inbound DB access to a narrower CIDR range; rollout included route table update"
+  },
+  {
+    "timestamp": "2026-03-05T08:20:00Z",
+    "component": "eks-nodegroup-payments",
+    "change_type": "scaling_policy_update",
+    "risk_level": "medium",
+    "details": "Adjusted CPU scale-out threshold"
+  }
+]

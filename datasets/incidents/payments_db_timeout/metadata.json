@@ -1,0 +1,5 @@
+{
+  "incident_name": "payments_db_timeout",
+  "title": "Payments API timeout spike after network policy change",
+  "service_name": "payments-api"
+}
