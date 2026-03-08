@@ -1,8 +1,0 @@
-[
-  {
-    "timestamp": "2026-03-05T09:10:00Z",
-    "change_id": "chg-billing-scaling",
-    "risk_level": "low",
-    "details": "Worker concurrency threshold update"
-  }
-]

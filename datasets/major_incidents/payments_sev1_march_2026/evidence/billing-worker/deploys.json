@@ -1,8 +1,0 @@
-[
-  {
-    "timestamp": "2026-03-03T12:30:00Z",
-    "version": "2026.03.03.7",
-    "change_id": "dep-billing-2026-03-03-7",
-    "notes": "No relevant production logic changes"
-  }
-]

@@ -1,8 +1,0 @@
-[
-  {
-    "timestamp": "2026-03-06T09:54:00Z",
-    "version": "2026.03.06.1",
-    "change_id": "dep-payments-2026-03-06-1",
-    "notes": "Payments request validation and instrumentation update"
-  }
-]

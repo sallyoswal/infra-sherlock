@@ -1,3 +1,0 @@
-2026-03-06T09:56:00Z|INFO|Checkout-api healthy heartbeat|corr=healthcheck
-2026-03-06T10:02:10Z|ERROR|Upstream timeout from payments-api charge endpoint|corr=corr-db-timeout-42
-2026-03-06T10:02:42Z|ERROR|Checkout completion failed due to payment timeout|corr=corr-db-timeout-42

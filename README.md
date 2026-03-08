@@ -32,18 +32,6 @@ Cloud dry-run investigation (no cloud API calls):
 PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
 ```
 
-Major-incident triage:
-
-```bash
-python cli/major_incident.py triage payments_sev1_march_2026
-```
-
-Major-incident command chat:
-
-```bash
-python cli/chat_major_incident.py payments_sev1_march_2026
-```
-
 AI-first watch mode (detect -> diagnose -> notify):
 
 ```bash
@@ -58,18 +46,6 @@ python cli/watch_incidents.py <incident-id> --detect-and-notify --dry-run
 
 In production, `incident-id` is typically sourced from your alerting/event system
 (PagerDuty incident key, Datadog monitor alert ID, internal incident UUID, etc.).
-
-Major-incident chat commands:
-
-- `/overview`
-- `/services`
-- `/blast-radius`
-- `/timeline`
-- `/hypotheses`
-- `/service <service_name>`
-- `/next-steps`
-- `/help`
-- `/exit`
 
 ## AI-Only Runtime Mode
 
@@ -89,29 +65,6 @@ Current cloud connectors:
 - Datadog plugin: read-only Events API collection.
 - PagerDuty plugin: incident/alert ingestion for service-scoped production context.
 - Slack notifier: outgoing webhook alerts with dedupe state.
-
-## Major Incident Mode
-
-Major incident mode adds a parent/child incident architecture for cross-team triage:
-
-- Parent incident group (`IncidentGroup`) tracks severity, status, commander, blast radius, and hypotheses.
-- Child incidents (`ChildIncident`) represent service-scoped failures with ownership and dependencies.
-- Deterministic correlation engine merges timelines, ranks hypotheses, and infers likely initiating fault vs downstream impact.
-- Infrastructure-aware correlation attributes suspicious `ChangeEvent` objects and identifies likely failing infrastructure layer.
-- Region/AZ-aware blast radius logic distinguishes localized vs broader impact scope.
-- Failure-pattern matching maps incidents to known cloud patterns (e.g., `db_connectivity_failure`, `security_group_regression`) with explainable evidence.
-
-### Deterministic Correlation Heuristics
-
-- earliest anomaly receives additional initiating-fault weight
-- high-risk infra changes near onset increase root-cause likelihood
-- shared dependency failures increase correlation strength
-- downstream timeout/upstream symptom patterns reduce root-cause likelihood for later services
-- nearby deploys remain alternate hypotheses but do not automatically dominate shared dependency/infra evidence
-- region/AZ concentration increases confidence for localized infrastructure faults
-- healthy bounded dependency paths reduce assumptions of global/regional outages
-
-Confidence is reported using buckets (`high`, `medium`, `low`) with supporting/contradicting evidence strings.
 
 ## Architecture
 
@@ -148,10 +101,7 @@ Local mode is retained for testing only and is intentionally not the primary pro
 │   └── cli-chat-screenshot.svg
 ├── cli/
 │   ├── chat_agent.py
-│   ├── chat_major_incident.py
 │   ├── env_utils.py
-│   ├── intent_classifier.py
-│   ├── major_incident.py
 │   ├── response_formatter.py
 │   ├── run_agent.py
 │   ├── run_mcp_server.py
@@ -174,9 +124,6 @@ Local mode is retained for testing only and is intentionally not the primary pro
 │   ├── notifications/
 │   ├── plugins/
 │   ├── routing.py
-│   ├── major_incident/
-│   │   ├── loader.py
-│   │   └── correlator.py
 │   ├── models.py
 │   ├── reasoning/
 │   ├── tools/
@@ -251,28 +198,12 @@ Implementation:
 - Server: `incident_agent/mcp/server.py`
 - Wrapper utilities: `incident_agent/mcp/wrapper.py`
 
-## Example Major-Incident Session
-
-```text
-$ python cli/chat_major_incident.py payments_sev1_march_2026
-> /overview
-SEV1 mitigating: Payment transaction failures across checkout stack
-Likely initiating service: payments-api
-Top hypothesis: Network/security-group path change degraded DB connectivity
-
-> /services
-- payments-api (payments-platform) first=09:58 role=probable cause confidence=high
-- checkout-api (checkout-platform) first=10:02 role=downstream confidence=medium
-- billing-worker (billing-platform) first=10:06 role=downstream confidence=low
-```
-
 ## Cloud/SRE Questions This Can Answer
 
-- Which infrastructure layer most likely failed first?
-- Which change event is most suspicious near incident onset?
-- Is this localized to one region/AZ or broader?
-- Is this primarily a service bug or infrastructure fault?
-- What is the single fastest validation check to confirm the top hypothesis?
+- Which service is currently degrading and why?
+- Which cloud/provider events correlate with the incident window?
+- What changed recently (deploy/config/infra) near incident onset?
+- What is the most likely root cause and the next safest remediation step?
 
 ## Suggested GitHub Topics
 

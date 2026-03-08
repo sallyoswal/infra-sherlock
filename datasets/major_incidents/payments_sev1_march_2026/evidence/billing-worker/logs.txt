@@ -1,2 +1,0 @@
-2026-03-06T10:06:40Z|WARN|Queue backlog increased due to upstream payment retries|corr=corr-db-timeout-42
-2026-03-06T10:07:50Z|ERROR|Settlement job exceeded SLA waiting for payment confirmation|corr=corr-db-timeout-42
