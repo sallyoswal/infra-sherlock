@@ -106,6 +106,8 @@ class TimelineEvent:
     event_type: str = ""
     summary: str = ""
     severity: str = ""
+    evidence_source: str = "local"
+    provider: str = "local"
 
 
 @dataclass
@@ -124,6 +126,21 @@ class IncidentReport:
 
 
 @dataclass
+class NotificationPayload:
+    """Structured incident notification payload for external channels."""
+
+    incident_name: str
+    incident_title: str
+    service_name: str
+    likely_root_cause: str
+    confidence: float
+    owner_team: str
+    slack_channel: str
+    key_evidence: list[str]
+    next_action: str
+
+
+@dataclass
 class ServiceMetadata:
     """Ownership and dependency metadata for a service."""
 
@@ -133,6 +150,9 @@ class ServiceMetadata:
     tier: str
     dependencies: list[str]
     critical_user_flows: list[str]
+    region: str = "us-east-1"
+    availability_zones: list[str] = field(default_factory=list)
+    infrastructure_components: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -152,6 +172,7 @@ class ChildIncident:
     report_summary: str = ""
     environment: str = "prod"
     region: str = "us-east-1"
+    availability_zones: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -176,6 +197,46 @@ class Hypothesis:
     confidence: str
     likely_role: str
     likely_affected_services: list[str] = field(default_factory=list)
+
+
+@dataclass
+class InfrastructureComponent:
+    """Lightweight infrastructure topology component model."""
+
+    component_id: str
+    type: str
+    region: str
+    availability_zones: list[str]
+    owner_team: str
+    connected_services: list[str]
+
+
+@dataclass
+class ChangeEvent:
+    """First-class infrastructure/deploy change event used in attribution."""
+
+    change_id: str
+    timestamp: str
+    source: str
+    resource_type: str
+    resource_name: str
+    operation: str
+    risk: str
+    related_services: list[str]
+    region: str
+    availability_zone: str | None = None
+
+
+@dataclass
+class FailurePatternMatch:
+    """Deterministic failure pattern match output."""
+
+    pattern_name: str
+    description: str
+    supporting_evidence: list[str]
+    contradicting_evidence: list[str]
+    confidence: str
+    recommended_validation: str
 
 
 @dataclass
@@ -224,7 +285,13 @@ class MajorIncidentReport:
     service_summaries: list[ServiceIncidentSummary]
     merged_timeline: list[TimelineEvent]
     hypotheses: list[Hypothesis]
+    failure_patterns: list[FailurePatternMatch]
     likely_initiating_fault_service: str
+    likely_fault_domain: str
+    likely_infrastructure_layer: str
+    suspicious_change_ids: list[str]
+    blast_radius_scope: str
+    fastest_validation_step: str
     impacted_services_count: int
     impacted_teams: list[str]
     customer_facing_impact: str

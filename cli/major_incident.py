@@ -46,6 +46,13 @@ def _render_plain(report) -> None:
     print(f"Incident: {group.title} ({group.group_id})")
     print(f"Severity: {group.severity} | Status: {group.status}")
     print(f"Likely initiating fault: {report.likely_initiating_fault_service}")
+    print(f"Likely fault domain: {report.likely_fault_domain}")
+    print(f"Likely infrastructure layer: {report.likely_infrastructure_layer}")
+    print(f"Blast radius scope: {report.blast_radius_scope}")
+    print(f"Suspicious changes: {', '.join(report.suspicious_change_ids) if report.suspicious_change_ids else 'none'}")
+    if report.failure_patterns:
+        print(f"Top pattern: {report.failure_patterns[0].pattern_name} [{report.failure_patterns[0].confidence}]")
+    print(f"Fastest validation: {report.fastest_validation_step}")
     if top_hyp:
         print(f"Top hypothesis: {top_hyp.title} [{top_hyp.confidence}]")
     print(f"Impacted services: {report.impacted_services_count}")
@@ -73,6 +80,11 @@ def _render_rich(report) -> None:
         f"[bold]Severity:[/bold] {group.severity}",
         f"[bold]Status:[/bold] {group.status}",
         f"[bold]Likely Initiating Fault:[/bold] {report.likely_initiating_fault_service}",
+        f"[bold]Likely Fault Domain:[/bold] {report.likely_fault_domain}",
+        f"[bold]Likely Infrastructure Layer:[/bold] {report.likely_infrastructure_layer}",
+        f"[bold]Blast Radius Scope:[/bold] {report.blast_radius_scope}",
+        f"[bold]Suspicious Changes:[/bold] {', '.join(report.suspicious_change_ids) if report.suspicious_change_ids else 'none'}",
+        f"[bold]Fastest Validation:[/bold] {report.fastest_validation_step}",
         f"[bold]Impacted Services:[/bold] {report.impacted_services_count}",
         f"[bold]Impacted Teams:[/bold] {', '.join(report.impacted_teams)}",
         f"[bold]Customer Impact:[/bold] {report.customer_facing_impact}",
@@ -81,6 +93,11 @@ def _render_rich(report) -> None:
         summary_lines.insert(
             3,
             f"[bold]Top Hypothesis:[/bold] {top_hyp.title} ({top_hyp.confidence})",
+        )
+    if report.failure_patterns:
+        summary_lines.insert(
+            4,
+            f"[bold]Top Pattern:[/bold] {report.failure_patterns[0].pattern_name} ({report.failure_patterns[0].confidence})",
         )
 
     console.print(Panel("\n".join(summary_lines), title=group.title, subtitle=group.group_id, border_style="red"))

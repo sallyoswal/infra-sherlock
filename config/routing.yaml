@@ -1,0 +1,17 @@
+services:
+  payments-api:
+    team: payments-platform
+  checkout-api:
+    team: checkout-platform
+  billing-worker:
+    team: billing-platform
+
+teams:
+  payments-platform:
+    slack_channel: "#payments-incidents"
+  checkout-platform:
+    slack_channel: "#checkout-incidents"
+  billing-platform:
+    slack_channel: "#billing-incidents"
+  incident-command:
+    slack_channel: "#incident-command"

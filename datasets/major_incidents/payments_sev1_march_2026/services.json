@@ -5,7 +5,10 @@
     "owner": "payments-oncall@company.example",
     "tier": "tier-0",
     "dependencies": ["db-payments-primary", "auth-api"],
-    "critical_user_flows": ["checkout", "card-charge"]
+    "critical_user_flows": ["checkout", "card-charge"],
+    "region": "us-east-1",
+    "availability_zones": ["us-east-1a", "us-east-1b"],
+    "infrastructure_components": ["alb-payments", "sg-payments-db", "rds-payments"]
   },
   {
     "service": "checkout-api",
@@ -13,7 +16,10 @@
     "owner": "checkout-oncall@company.example",
     "tier": "tier-0",
     "dependencies": ["payments-api", "auth-api"],
-    "critical_user_flows": ["checkout"]
+    "critical_user_flows": ["checkout"],
+    "region": "us-east-1",
+    "availability_zones": ["us-east-1a", "us-east-1b"],
+    "infrastructure_components": ["alb-checkout", "service-checkout"]
   },
   {
     "service": "billing-worker",
@@ -21,7 +27,10 @@
     "owner": "billing-oncall@company.example",
     "tier": "tier-1",
     "dependencies": ["payments-api", "checkout-api", "db-billing"],
-    "critical_user_flows": ["invoice-settlement"]
+    "critical_user_flows": ["invoice-settlement"],
+    "region": "us-east-1",
+    "availability_zones": ["us-east-1b"],
+    "infrastructure_components": ["queue-billing", "worker-billing", "db-billing"]
   },
   {
     "service": "auth-api",
@@ -29,6 +38,9 @@
     "owner": "identity-oncall@company.example",
     "tier": "tier-0",
     "dependencies": ["db-auth"],
-    "critical_user_flows": ["login", "token-refresh"]
+    "critical_user_flows": ["login", "token-refresh"],
+    "region": "us-east-1",
+    "availability_zones": ["us-east-1a", "us-east-1b"],
+    "infrastructure_components": ["alb-auth", "db-auth"]
   }
 ]

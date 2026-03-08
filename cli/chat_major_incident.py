@@ -36,10 +36,13 @@ def build_parser() -> argparse.ArgumentParser:
 def _overview(report) -> str:
     g = report.incident_group
     h = report.hypotheses[0] if report.hypotheses else None
+    p = report.failure_patterns[0] if report.failure_patterns else None
     return (
         f"{g.severity} {g.status}: {g.title}\n"
         f"Likely initiating service: {report.likely_initiating_fault_service}\n"
+        f"Likely fault domain: {report.likely_fault_domain} ({report.likely_infrastructure_layer})\n"
         f"Top hypothesis: {h.title if h else 'n/a'}\n"
+        f"Top pattern match: {p.pattern_name if p else 'n/a'} ({p.confidence if p else 'n/a'})\n"
         f"Customer impact: {report.customer_facing_impact}"
     )
 
@@ -74,6 +77,11 @@ def _hypotheses(report) -> str:
     lines = ["Hypotheses:"]
     for idx, h in enumerate(report.hypotheses, start=1):
         lines.append(f"{idx}. {h.title} ({h.confidence}, role={h.likely_role})")
+    if report.failure_patterns:
+        lines.append("")
+        lines.append("Failure patterns:")
+        for p in report.failure_patterns[:3]:
+            lines.append(f"- {p.pattern_name} ({p.confidence})")
     return "\n".join(lines)
 
 
@@ -94,6 +102,7 @@ def _service(report, service_name: str) -> str:
 
 def _next_steps(report) -> str:
     lines = ["Next steps:"]
+    lines.append(f"- Fastest validation: {report.fastest_validation_step}")
     lines.extend(f"- {s}" for s in report.recommended_next_actions)
     return "\n".join(lines)
 

@@ -1,0 +1,27 @@
+[
+  {
+    "pattern_name": "db_connectivity_failure",
+    "description": "Database connectivity degraded after network/security-layer change, causing timeout errors in primary service.",
+    "required_signals": ["high_risk_network_change", "db_timeout_spike", "earliest_service_first"]
+  },
+  {
+    "pattern_name": "upstream_timeout_cascade",
+    "description": "Primary service failures propagated downstream as upstream timeout errors.",
+    "required_signals": ["downstream_upstream_symptoms", "shared_correlation_id", "dependency_fanout"]
+  },
+  {
+    "pattern_name": "bad_deploy",
+    "description": "A recent deploy introduced behavior regression near incident onset.",
+    "required_signals": ["recent_deploy_near_onset", "single_service_isolated"]
+  },
+  {
+    "pattern_name": "route_misconfiguration",
+    "description": "Routing or network boundary updates caused partial service reachability failure.",
+    "required_signals": ["high_risk_network_change", "single_az_concentration"]
+  },
+  {
+    "pattern_name": "security_group_regression",
+    "description": "Security group policy change blocked required database or service traffic.",
+    "required_signals": ["high_risk_network_change", "db_timeout_spike", "bounded_blast_radius"]
+  }
+]

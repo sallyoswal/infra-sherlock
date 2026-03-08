@@ -14,5 +14,6 @@
   "related_change_ids": ["chg-sg-773", "dep-payments-2026-03-06-1"],
   "report_summary": "payments-api began failing first with DB timeout errors shortly after a high-risk security-group change.",
   "environment": "prod",
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "availability_zones": ["us-east-1a"]
 }

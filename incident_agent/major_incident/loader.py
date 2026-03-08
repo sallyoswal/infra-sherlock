@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from incident_agent.loader import IncidentDataError, incident_dir, load_json
-from incident_agent.models import BlastRadius, ChildIncident, IncidentGroup, ServiceMetadata
+from incident_agent.models import (
+    BlastRadius,
+    ChangeEvent,
+    ChildIncident,
+    IncidentGroup,
+    InfrastructureComponent,
+    ServiceMetadata,
+)
 
 
 @dataclass
@@ -17,6 +24,9 @@ class MajorIncidentDataset:
     incident_group: IncidentGroup
     service_metadata: list[ServiceMetadata]
     child_incidents: list[ChildIncident]
+    infrastructure_components: list[InfrastructureComponent]
+    change_events: list[ChangeEvent]
+    failure_patterns: list[dict]
 
 
 def _parse_blast_radius(payload: dict) -> BlastRadius:
@@ -57,6 +67,9 @@ def _parse_services(payload: list[dict]) -> list[ServiceMetadata]:
                 tier=item["tier"],
                 dependencies=list(item.get("dependencies", [])),
                 critical_user_flows=list(item.get("critical_user_flows", [])),
+                region=str(item.get("region", "us-east-1")),
+                availability_zones=list(item.get("availability_zones", [])),
+                infrastructure_components=list(item.get("infrastructure_components", [])),
             )
         )
     return services
@@ -77,7 +90,44 @@ def _parse_child(payload: dict) -> ChildIncident:
         report_summary=str(payload.get("report_summary", "")),
         environment=str(payload.get("environment", "prod")),
         region=str(payload.get("region", "us-east-1")),
+        availability_zones=list(payload.get("availability_zones", [])),
     )
+
+
+def _parse_infrastructure(payload: list[dict]) -> list[InfrastructureComponent]:
+    components: list[InfrastructureComponent] = []
+    for item in payload:
+        components.append(
+            InfrastructureComponent(
+                component_id=item["component_id"],
+                type=item["type"],
+                region=item["region"],
+                availability_zones=list(item.get("availability_zones", [])),
+                owner_team=item["owner_team"],
+                connected_services=list(item.get("connected_services", [])),
+            )
+        )
+    return components
+
+
+def _parse_change_events(payload: list[dict]) -> list[ChangeEvent]:
+    events: list[ChangeEvent] = []
+    for item in payload:
+        events.append(
+            ChangeEvent(
+                change_id=item["change_id"],
+                timestamp=item["timestamp"],
+                source=item["source"],
+                resource_type=item["resource_type"],
+                resource_name=item["resource_name"],
+                operation=item["operation"],
+                risk=item["risk"],
+                related_services=list(item.get("related_services", [])),
+                region=item.get("region", "us-east-1"),
+                availability_zone=item.get("availability_zone"),
+            )
+        )
+    return events
 
 
 def load_major_incident_dataset(
@@ -92,6 +142,9 @@ def load_major_incident_dataset(
 
     group_payload = load_json(group_dir / "incident_group.json")
     service_payload = load_json(group_dir / "services.json")
+    infra_payload = load_json(group_dir / "infrastructure.json")
+    changes_payload = load_json(group_dir / "change_events.json")
+    pattern_payload = load_json(group_dir / "failure_patterns.json")
 
     child_dir = group_dir / "child_incidents"
     if not child_dir.exists() or not child_dir.is_dir():
@@ -103,6 +156,8 @@ def load_major_incident_dataset(
 
     incident_group = _parse_group(group_payload)
     services = _parse_services(service_payload)
+    infrastructure = _parse_infrastructure(infra_payload)
+    change_events = _parse_change_events(changes_payload)
 
     if not child_incidents:
         raise IncidentDataError(f"No child incident files found in {child_dir}")
@@ -112,4 +167,7 @@ def load_major_incident_dataset(
         incident_group=incident_group,
         service_metadata=services,
         child_incidents=child_incidents,
+        infrastructure_components=infrastructure,
+        change_events=change_events,
+        failure_patterns=list(pattern_payload),
     )

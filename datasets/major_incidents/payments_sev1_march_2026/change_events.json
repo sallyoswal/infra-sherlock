@@ -1,0 +1,36 @@
+[
+  {
+    "change_id": "chg-sg-773",
+    "timestamp": "2026-03-06T09:57:30Z",
+    "source": "terraform",
+    "resource_type": "security_group",
+    "resource_name": "sg-payments-db",
+    "operation": "ingress_update",
+    "risk": "high",
+    "related_services": ["payments-api", "checkout-api", "billing-worker"],
+    "region": "us-east-1",
+    "availability_zone": "us-east-1a"
+  },
+  {
+    "change_id": "dep-payments-2026-03-06-1",
+    "timestamp": "2026-03-06T09:54:00Z",
+    "source": "deploy",
+    "resource_type": "service",
+    "resource_name": "payments-api",
+    "operation": "rollout",
+    "risk": "medium",
+    "related_services": ["payments-api"],
+    "region": "us-east-1"
+  },
+  {
+    "change_id": "dep-checkout-2026-03-06-3",
+    "timestamp": "2026-03-05T18:20:00Z",
+    "source": "deploy",
+    "resource_type": "service",
+    "resource_name": "checkout-api",
+    "operation": "rollout",
+    "risk": "low",
+    "related_services": ["checkout-api"],
+    "region": "us-east-1"
+  }
+]

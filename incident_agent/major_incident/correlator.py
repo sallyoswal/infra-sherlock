@@ -12,9 +12,10 @@ from incident_agent.loader import IncidentDataError
 from incident_agent.major_incident.loader import load_major_incident_dataset
 from incident_agent.models import (
     BlastRadius,
+    ChangeEvent,
     ChildIncident,
+    FailurePatternMatch,
     Hypothesis,
-    IncidentGroup,
     MajorIncidentReport,
     ServiceIncidentSummary,
     ServiceMetadata,
@@ -190,49 +191,195 @@ def _confidence_bucket(score: int) -> str:
     return "low"
 
 
+def _match_suspicious_changes(
+    change_events: list[ChangeEvent],
+    earliest_ts: str,
+    initiating_service: str,
+) -> list[ChangeEvent]:
+    t0 = _dt(earliest_ts)
+    candidates: list[tuple[int, ChangeEvent]] = []
+
+    for change in change_events:
+        proximity_minutes = abs(int((_dt(change.timestamp) - t0).total_seconds() // 60))
+        if proximity_minutes > 20:
+            continue
+
+        score = 0
+        if change.risk.lower() == "high":
+            score += 4
+        elif change.risk.lower() == "medium":
+            score += 2
+
+        if initiating_service in change.related_services:
+            score += 3
+
+        if change.resource_type in {"security_group", "route_table", "nacl", "dns"}:
+            score += 3
+
+        # Closer changes are more suspicious.
+        score += max(0, 5 - proximity_minutes)
+
+        if score > 0:
+            candidates.append((score, change))
+
+    candidates.sort(key=lambda item: (-item[0], item[1].timestamp))
+    return [c for _, c in candidates]
+
+
+def _infer_infrastructure_layer(top_change: ChangeEvent | None) -> str:
+    if top_change is None:
+        return "unknown"
+
+    mapping = {
+        "security_group": "network_boundary",
+        "route_table": "network_boundary",
+        "nacl": "network_boundary",
+        "dns": "edge_routing",
+        "alb": "load_balancer",
+        "postgres": "database",
+        "rds": "database",
+        "redis": "cache",
+        "service": "application",
+    }
+    return mapping.get(top_change.resource_type, "application")
+
+
+def _infer_blast_radius_scope(children: list[ChildIncident]) -> str:
+    regions = sorted(set(c.region for c in children))
+    azs = sorted({az for c in children for az in c.availability_zones})
+
+    if len(regions) == 1 and len(azs) <= 2:
+        return "localized"
+    if len(regions) == 1:
+        return "regional"
+    return "multi-region"
+
+
+def _fastest_validation_step(top_change: ChangeEvent | None, layer: str) -> str:
+    if top_change is None:
+        return "Validate dependency health checks between initiating service and shared upstream dependencies."
+
+    if top_change.resource_type == "security_group":
+        return (
+            f"Compare DB connection success rate and rejected connections before/after {top_change.change_id} "
+            f"on {top_change.resource_name}."
+        )
+    if top_change.resource_type in {"route_table", "nacl", "dns"}:
+        return (
+            f"Run targeted connectivity probes for {top_change.resource_name} in {top_change.region} to confirm "
+            f"routing/ACL behavior after {top_change.change_id}."
+        )
+    if top_change.source == "deploy":
+        return (
+            f"Canary rollback {top_change.change_id} and compare error rate + latency for 15 minutes."
+        )
+
+    return f"Validate the top suspicious {layer} change {top_change.change_id} with before/after metrics."
+
+
+def _compute_pattern_signals(
+    summaries: list[ServiceIncidentSummary],
+    suspicious_changes: list[ChangeEvent],
+    blast_scope: str,
+    shared_corr: bool,
+) -> dict[str, bool]:
+    has_db_timeouts = any(any("timeout" in e.lower() for e in s.evidence) for s in summaries)
+    has_downstream = any(s.likely_role == "downstream" for s in summaries)
+    only_one_service_probable = sum(1 for s in summaries if s.likely_role == "probable cause") == 1
+
+    return {
+        "high_risk_network_change": any(
+            c.risk.lower() == "high" and c.resource_type in {"security_group", "route_table", "nacl", "dns"}
+            for c in suspicious_changes
+        ),
+        "db_timeout_spike": has_db_timeouts,
+        "earliest_service_first": only_one_service_probable,
+        "downstream_upstream_symptoms": has_downstream,
+        "shared_correlation_id": shared_corr,
+        "dependency_fanout": len(summaries) >= 3,
+        "recent_deploy_near_onset": any(c.source == "deploy" for c in suspicious_changes),
+        "single_service_isolated": len(summaries) == 1,
+        "single_az_concentration": blast_scope == "localized",
+        "bounded_blast_radius": blast_scope in {"localized", "regional"},
+    }
+
+
+def _match_failure_patterns(pattern_defs: list[dict], signals: dict[str, bool]) -> list[FailurePatternMatch]:
+    matches: list[FailurePatternMatch] = []
+    for pattern in pattern_defs:
+        required = list(pattern.get("required_signals", []))
+        supporting = [s for s in required if signals.get(s, False)]
+        contradicting = [s for s in required if not signals.get(s, False)]
+
+        ratio = len(supporting) / len(required) if required else 0.0
+        if ratio >= 0.8:
+            confidence = "high"
+        elif ratio >= 0.5:
+            confidence = "medium"
+        else:
+            confidence = "low"
+
+        matches.append(
+            FailurePatternMatch(
+                pattern_name=pattern["pattern_name"],
+                description=pattern.get("description", ""),
+                supporting_evidence=supporting,
+                contradicting_evidence=contradicting,
+                confidence=confidence,
+                recommended_validation=(
+                    f"Validate signals for pattern {pattern['pattern_name']} by checking: "
+                    f"{', '.join(required[:2]) if required else 'core telemetry'}"
+                ),
+            )
+        )
+
+    order = {"high": 0, "medium": 1, "low": 2}
+    matches.sort(key=lambda m: (order[m.confidence], m.pattern_name))
+    return matches
+
+
 def _build_hypotheses(
     initiating_service: str,
     summaries: list[ServiceIncidentSummary],
-    all_high_risk_changes: list[str],
+    suspicious_changes: list[ChangeEvent],
 ) -> list[Hypothesis]:
     services = [s.service for s in summaries]
+    high_risk_change_ids = [c.change_id for c in suspicious_changes if c.risk.lower() == "high"]
 
     infra_support = [
-        f"High-risk infra changes observed: {', '.join(all_high_risk_changes)}"
-        if all_high_risk_changes
-        else "No high-risk infra change records found",
+        f"High-risk infra changes near first anomaly: {', '.join(high_risk_change_ids)}"
+        if high_risk_change_ids
+        else "No high-risk infra changes near first anomaly.",
         f"Earliest anomaly observed in {initiating_service}",
-        "Downstream services reported timeout/upstream dependency symptoms after primary failure.",
+        "Downstream services showed upstream timeout/dependency symptoms after primary failure.",
     ]
     infra_contradict = [
-        "A recent deploy was also present and could contribute to service instability.",
+        "A recent deploy was also present and remains an alternate explanation.",
     ]
 
-    deploy_support = ["Recent deploys occurred near incident start window."]
+    deploy_support = [
+        "A recent deploy occurred near incident onset and could explain a service-local regression.",
+    ]
     deploy_contradict = [
-        "Shared dependency and infra-change signals are present across services.",
-        f"Earliest failure sequence points to {initiating_service} before downstream degradation.",
+        "Cross-service dependency impact and shared timing align better with infrastructure-layer disruption.",
     ]
 
     infra_hyp = Hypothesis(
         title="Network/security-group path change degraded DB connectivity",
         description=(
-            "A high-risk network/ingress change likely disrupted database access for the initiating service, "
-            "causing cascading timeouts in dependent services."
+            "A high-risk network boundary change likely disrupted database access for the initiating service, "
+            "causing timeout cascades in dependent services."
         ),
         supporting_evidence=infra_support,
         contradicting_evidence=infra_contradict,
-        confidence="high" if all_high_risk_changes else "medium",
+        confidence="high" if high_risk_change_ids else "medium",
         likely_role="initiating fault",
         likely_affected_services=services,
     )
 
     deploy_hyp = Hypothesis(
         title="Recent deploy introduced latent regression",
-        description=(
-            "A deploy close to incident onset could have introduced a latency or retry regression; this remains "
-            "a plausible alternate hypothesis."
-        ),
+        description="A deploy close to onset could have added latency/retry regression and amplified failures.",
         supporting_evidence=deploy_support,
         contradicting_evidence=deploy_contradict,
         confidence="medium",
@@ -240,10 +387,7 @@ def _build_hypotheses(
         likely_affected_services=services,
     )
 
-    # Deterministic ranking: infra hypothesis first when it has high-risk evidence.
-    if all_high_risk_changes:
-        return [infra_hyp, deploy_hyp]
-    return [deploy_hyp, infra_hyp]
+    return [infra_hyp, deploy_hyp] if high_risk_change_ids else [deploy_hyp, infra_hyp]
 
 
 def triage_major_incident(
@@ -259,10 +403,12 @@ def triage_major_incident(
     for child in dataset.child_incidents:
         evidence_by_service[child.service] = _load_service_evidence(dataset.root_dir, child)
 
-    earliest_service = min(
+    earliest_child = min(
         dataset.child_incidents,
         key=lambda c: _dt(evidence_by_service[c.service].first_anomaly),
-    ).service
+    )
+    earliest_service = earliest_child.service
+    earliest_ts = evidence_by_service[earliest_service].first_anomaly
 
     dependency_counter: Counter[str] = Counter()
     for child in dataset.child_incidents:
@@ -270,12 +416,10 @@ def triage_major_incident(
 
     summaries: list[ServiceIncidentSummary] = []
     merged_timeline: list[TimelineEvent] = []
-    all_high_risk_change_ids: list[str] = []
 
     for child in dataset.child_incidents:
         service = child.service
         evidence = evidence_by_service[service]
-        meta = metadata_by_service.get(service)
 
         shared_dependencies = [d for d in child.upstream_dependencies if dependency_counter[d] >= 2]
 
@@ -287,14 +431,13 @@ def triage_major_incident(
             evidence_notes.append("Earliest anomaly detected among impacted services.")
 
         if evidence.high_risk_changes:
-            score += 3
+            score += 2
             ids = [c.get("change_id", "unknown-change") for c in evidence.high_risk_changes]
-            all_high_risk_change_ids.extend(ids)
-            evidence_notes.append(f"High-risk infra changes near onset: {', '.join(ids)}")
+            evidence_notes.append(f"Service-local high-risk infra changes near onset: {', '.join(ids)}")
 
         if shared_dependencies:
             score += 2
-            evidence_notes.append(f"Shares failing dependencies with other services: {', '.join(shared_dependencies)}")
+            evidence_notes.append(f"Shares failing dependencies with peers: {', '.join(shared_dependencies)}")
 
         if evidence.timeout_events >= 2:
             score += 1
@@ -331,10 +474,26 @@ def triage_major_incident(
 
     merged_timeline = sorted(merged_timeline, key=lambda e: e.timestamp)
 
+    suspicious_changes = _match_suspicious_changes(dataset.change_events, earliest_ts, earliest_service)
+    top_change = suspicious_changes[0] if suspicious_changes else None
+
+    layer = _infer_infrastructure_layer(top_change)
+    blast_scope = _infer_blast_radius_scope(dataset.child_incidents)
+    fault_domain = "infrastructure" if layer in {"network_boundary", "database", "edge_routing"} else "service"
+
+    shared_corr_ids = set.intersection(*(set(s.correlation_ids) for s in summaries)) if summaries else set()
+    signals = _compute_pattern_signals(
+        summaries=summaries,
+        suspicious_changes=suspicious_changes,
+        blast_scope=blast_scope,
+        shared_corr=bool(shared_corr_ids),
+    )
+    pattern_matches = _match_failure_patterns(dataset.failure_patterns, signals)
+
     hypotheses = _build_hypotheses(
         initiating_service=earliest_service,
         summaries=summaries,
-        all_high_risk_changes=sorted(set(all_high_risk_change_ids)),
+        suspicious_changes=suspicious_changes,
     )
 
     impacted_services = [s.service for s in summaries]
@@ -360,8 +519,10 @@ def triage_major_incident(
     dataset.incident_group.global_timeline = merged_timeline
     dataset.incident_group.hypotheses = hypotheses
 
+    fastest_step = _fastest_validation_step(top_change, layer)
+
     recommended_actions = [
-        "Validate and rollback/adjust high-risk DB ingress/security-group changes in the incident window.",
+        fastest_step,
         "Prioritize payments-api dependency path checks, then verify checkout-api and billing-worker recovery.",
         "Coordinate service owners to monitor transaction success rate and p95 latency during mitigation rollout.",
     ]
@@ -373,7 +534,13 @@ def triage_major_incident(
         service_summaries=sorted(summaries, key=lambda s: s.first_anomaly),
         merged_timeline=merged_timeline,
         hypotheses=hypotheses,
+        failure_patterns=pattern_matches,
         likely_initiating_fault_service=earliest_service,
+        likely_fault_domain=fault_domain,
+        likely_infrastructure_layer=layer,
+        suspicious_change_ids=[c.change_id for c in suspicious_changes[:3]],
+        blast_radius_scope=blast_scope,
+        fastest_validation_step=fastest_step,
         impacted_services_count=len(set(impacted_services)),
         impacted_teams=impacted_teams,
         customer_facing_impact=dataset.incident_group.blast_radius.customer_facing_impact,

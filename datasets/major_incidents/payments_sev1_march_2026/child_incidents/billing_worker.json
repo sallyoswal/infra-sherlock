@@ -14,5 +14,6 @@
   "related_change_ids": ["ops-billing-batch-window"],
   "report_summary": "billing-worker impact started later and appears downstream from checkout/payments instability.",
   "environment": "prod",
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "availability_zones": ["us-east-1b"]
 }

@@ -29,3 +29,25 @@ def test_blast_radius_inference_and_timeline_ordering() -> None:
 
     ts = [e.timestamp for e in report.merged_timeline]
     assert ts == sorted(ts)
+
+
+def test_infrastructure_change_attribution_and_fault_domain() -> None:
+    report = triage_major_incident("payments_sev1_march_2026")
+
+    assert "chg-sg-773" in report.suspicious_change_ids
+    assert report.likely_fault_domain == "infrastructure"
+    assert report.likely_infrastructure_layer in {"network_boundary", "database", "edge_routing"}
+
+
+def test_pattern_matching_and_validation_step() -> None:
+    report = triage_major_incident("payments_sev1_march_2026")
+    assert len(report.failure_patterns) >= 1
+    top = report.failure_patterns[0]
+    assert top.confidence in {"high", "medium", "low"}
+    assert "Validate" in report.fastest_validation_step or "Compare" in report.fastest_validation_step
+
+
+def test_region_az_scope_reasoning() -> None:
+    report = triage_major_incident("payments_sev1_march_2026")
+    assert report.blast_radius_scope in {"localized", "regional", "multi-region"}
+    assert report.blast_radius_scope == "localized"

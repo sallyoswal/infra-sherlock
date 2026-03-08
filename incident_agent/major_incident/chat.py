@@ -38,6 +38,11 @@ def _report_context_payload(report: MajorIncidentReport) -> dict[str, Any]:
             "summary": report.incident_group.summary,
         },
         "likely_initiating_fault_service": report.likely_initiating_fault_service,
+        "likely_fault_domain": report.likely_fault_domain,
+        "likely_infrastructure_layer": report.likely_infrastructure_layer,
+        "suspicious_change_ids": report.suspicious_change_ids,
+        "blast_radius_scope": report.blast_radius_scope,
+        "fastest_validation_step": report.fastest_validation_step,
         "impacted_services_count": report.impacted_services_count,
         "impacted_teams": report.impacted_teams,
         "customer_facing_impact": report.customer_facing_impact,
@@ -63,6 +68,17 @@ def _report_context_payload(report: MajorIncidentReport) -> dict[str, Any]:
             for s in report.service_summaries
         ],
         "recommended_next_actions": report.recommended_next_actions,
+        "failure_patterns": [
+            {
+                "pattern_name": p.pattern_name,
+                "description": p.description,
+                "supporting_evidence": p.supporting_evidence,
+                "contradicting_evidence": p.contradicting_evidence,
+                "confidence": p.confidence,
+                "recommended_validation": p.recommended_validation,
+            }
+            for p in report.failure_patterns
+        ],
         "timeline": [
             {
                 "timestamp": e.timestamp,
