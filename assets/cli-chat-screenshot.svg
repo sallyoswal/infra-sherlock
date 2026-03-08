@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#0f172a"/>
+  <rect x="40" y="40" width="1120" height="620" rx="12" fill="#111827" stroke="#334155"/>
+  <text x="70" y="85" fill="#93c5fd" font-family="Menlo, Monaco, monospace" font-size="24">Infra Sherlock Chat</text>
+  <text x="70" y="125" fill="#e5e7eb" font-family="Menlo, Monaco, monospace" font-size="18">Investigating incident: payments_db_timeout</text>
+  <text x="70" y="165" fill="#cbd5e1" font-family="Menlo, Monaco, monospace" font-size="18">Summary: payments-api degraded due to DB connectivity after security group change.</text>
+  <text x="70" y="215" fill="#86efac" font-family="Menlo, Monaco, monospace" font-size="18">&gt; timeline</text>
+  <text x="70" y="255" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">09:54 deploy payments-api v2026.03.06.1</text>
+  <text x="70" y="285" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">09:58 security group restricted DB ingress</text>
+  <text x="70" y="315" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">10:04 first DB timeout detected</text>
+  <text x="70" y="365" fill="#86efac" font-family="Menlo, Monaco, monospace" font-size="18">&gt; why do we think it is network?</text>
+  <text x="70" y="405" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">Evidence:</text>
+  <text x="70" y="435" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">- 5 database timeout log events</text>
+  <text x="70" y="465" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">- error rate rose to 4.10%</text>
+  <text x="70" y="495" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">- p95 latency jumped to 1280ms</text>
+  <text x="70" y="525" fill="#f8fafc" font-family="Menlo, Monaco, monospace" font-size="18">- infra change modified DB ingress rules</text>
+  <text x="70" y="590" fill="#94a3b8" font-family="Menlo, Monaco, monospace" font-size="16">Commands: /summary /root /timeline /evidence /remediation /help /exit</text>
+</svg>

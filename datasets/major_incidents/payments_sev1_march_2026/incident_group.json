@@ -1,0 +1,23 @@
+{
+  "group_id": "payments-sev1-2026-03-06",
+  "title": "SEV1: Payment transaction failures across checkout stack",
+  "status": "mitigating",
+  "severity": "SEV1",
+  "start_time": "2026-03-06T09:54:00Z",
+  "end_time": null,
+  "commander": "oncall-platform@company.example",
+  "summary": "Payments transaction failures cascaded from payments-api to checkout-api and billing-worker after a high-risk DB ingress/network change.",
+  "child_incident_ids": [
+    "payments-api-db-timeout",
+    "checkout-api-upstream-timeout",
+    "billing-worker-queue-backlog"
+  ],
+  "suspected_root_services": ["payments-api"],
+  "blast_radius": {
+    "impacted_services": ["payments-api", "checkout-api", "billing-worker"],
+    "impacted_teams": ["payments-platform", "checkout-platform", "billing-platform"],
+    "impacted_user_flows": ["checkout", "card-charge", "invoice-settlement"],
+    "impacted_regions": ["us-east-1"],
+    "customer_facing_impact": "Customers experienced elevated checkout failures and delayed billing settlement."
+  }
+}

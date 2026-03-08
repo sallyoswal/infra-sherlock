@@ -1,4 +1,4 @@
-"""Interactive chat CLI for discussing a local incident with OpenAI."""
+"""Interactive chat CLI for discussing incidents with Infra Sherlock."""
 
 from __future__ import annotations
 
@@ -12,6 +12,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.env_utils import load_local_env
+from cli.response_formatter import (
+    ChatRenderer,
+    build_local_payload,
+    export_report_to_path,
+)
 from incident_agent.chat import IncidentChatError, ask_incident_question, create_chat_session
 from incident_agent.loader import IncidentDataError
 from incident_agent.models import IncidentReport
@@ -30,66 +35,37 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default=None,
-        help="Optional OpenAI model override (defaults to OPENAI_MODEL or gpt-4o-mini).",
+        help="Optional provider model override.",
     )
     return parser
 
 
-def _report_to_markdown(report: IncidentReport) -> str:
-    """Convert an incident report into markdown."""
-    lines: list[str] = [
-        f"# {report.incident_title}",
-        "",
-        f"- **Incident Name:** `{report.incident_name}`",
-        f"- **Service:** `{report.service_name}`",
-        f"- **Likely Root Cause:** {report.likely_root_cause}",
-        f"- **Confidence:** {report.confidence:.2f}",
-        "",
-        "## Key Evidence",
-    ]
-    lines.extend(f"- {item}" for item in report.key_evidence)
-    lines.append("")
-    lines.append("## Incident Timeline")
-    lines.extend(f"- `{event.timestamp}` [{event.source}] {event.event}" for event in report.timeline)
-    lines.append("")
-    lines.append("## Suggested Remediation")
-    lines.extend(f"- {item}" for item in report.suggested_remediation)
-    lines.append("")
-    lines.append("## Next Investigative Steps")
-    lines.extend(f"- {item}" for item in report.next_investigative_steps)
-    lines.append("")
-    return "\n".join(lines)
-
-
 def handle_slash_command(command: str, report: IncidentReport) -> str:
-    """Handle local slash commands for fast incident navigation."""
+    """Backward-compatible command helper used by tests and automation."""
     if command == "/summary":
-        return (
-            f"Incident: {report.incident_title} ({report.incident_name})\n"
-            f"Service: {report.service_name}\n"
-            f"Likely Root Cause: {report.likely_root_cause}\n"
-            f"Confidence: {report.confidence:.2f}"
-        )
+        payload = build_local_payload(report, intent="summary")
+        return "\n".join(payload.lines)
+    if command in {"/root", "/root-cause"}:
+        payload = build_local_payload(report, intent="root-cause")
+        return "\n".join(payload.lines)
     if command == "/timeline":
-        lines = ["Incident Timeline:"]
-        lines.extend(f"- {e.timestamp} [{e.source}] {e.event}" for e in report.timeline)
-        return "\n".join(lines)
+        payload = build_local_payload(report, intent="timeline", detailed=True)
+        return "Incident Timeline:\n" + "\n".join(
+            f"- {item.timestamp} [{item.source}] {item.event}" for item in payload.timeline or []
+        )
     if command == "/evidence":
-        lines = ["Key Evidence:"]
-        lines.extend(f"- {item}" for item in report.key_evidence)
-        return "\n".join(lines)
+        payload = build_local_payload(report, intent="evidence")
+        return "Key Evidence:\n" + "\n".join(payload.lines)
     if command == "/remediation":
-        lines = ["Suggested Remediation:"]
-        lines.extend(f"- {item}" for item in report.suggested_remediation)
-        return "\n".join(lines)
+        payload = build_local_payload(report, intent="remediation")
+        return "Suggested Remediation:\n" + "\n".join(payload.lines)
     if command.startswith("/export "):
         output_path = Path(command.split(" ", 1)[1].strip())
-        if not output_path:
-            return "Usage: /export <file.md>"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(_report_to_markdown(report), encoding="utf-8")
+        export_report_to_path(report, output_path)
         return f"Exported report to: {output_path}"
-    return "Unknown command. Use /summary, /timeline, /evidence, /remediation, /export <file.md>."
+    if command == "/help":
+        return "Commands: /summary, /root, /timeline, /evidence, /remediation, /help, /exit"
+    return "Unknown command. Use /help for available commands."
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -107,32 +83,74 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
 
-    print(f"Infra Sherlock Chat: {session.report.incident_title} ({session.report.incident_name})")
-    print("Ask questions about this incident. Type 'exit' or 'quit' to stop.")
-    print("Slash commands: /summary, /timeline, /evidence, /remediation, /export <file.md>")
+    renderer = ChatRenderer()
+    renderer.print_startup(session.report)
+
     while True:
         try:
-            question = input("> ").strip()
+            user_text = input("> ").strip()
         except EOFError:
             print()
             break
-        if question.lower() in {"exit", "quit"}:
+
+        if user_text.lower() in {"exit", "quit", "/exit", "/quit"}:
             break
-        if not question:
+        if not user_text:
             continue
-        if question.startswith("/"):
+
+        if user_text.startswith("/export "):
             try:
-                print(handle_slash_command(question, session.report))
+                target = Path(user_text.split(" ", 1)[1].strip())
+                export_report_to_path(session.report, target)
+                renderer.print_llm_answer(f"Exported report to: {target}")
             except OSError as exc:
-                print(f"Error: failed to run command: {exc}", file=sys.stderr)
+                print(f"Error: failed to export report: {exc}", file=sys.stderr)
                 return 4
             continue
+
+        if user_text.lower() in {"/help", "help"}:
+            renderer.print_help()
+            continue
+
+        if user_text.startswith("/"):
+            command_output = handle_slash_command(user_text, session.report)
+            if command_output.startswith("Unknown command"):
+                renderer.print_llm_answer(command_output)
+                continue
+            # Keep compatibility with existing slash command behavior.
+            if user_text.lower() in {"/summary", "/root", "/root-cause", "/timeline", "/evidence", "/remediation"}:
+                if user_text.lower() in {"/summary"}:
+                    renderer.print_payload(build_local_payload(session.report, intent="summary"))
+                elif user_text.lower() in {"/root", "/root-cause"}:
+                    renderer.print_payload(build_local_payload(session.report, intent="root-cause"))
+                elif user_text.lower() in {"/timeline"}:
+                    renderer.print_payload(build_local_payload(session.report, intent="timeline", detailed=True))
+                elif user_text.lower() in {"/evidence"}:
+                    renderer.print_payload(build_local_payload(session.report, intent="evidence"))
+                elif user_text.lower() in {"/remediation"}:
+                    renderer.print_payload(build_local_payload(session.report, intent="remediation"))
+                continue
+            renderer.print_llm_answer("Unknown command. Use /help for available commands.")
+            continue
+
+        wants_detail = any(
+            token in user_text.lower()
+            for token in ("detail", "detailed", "explain", "deep", "deeper", "expand", "elaborate")
+        )
+
         try:
-            answer = ask_incident_question(session=session, question=question, model=args.model)
+            answer = ask_incident_question(
+                session=session,
+                question=user_text,
+                model=args.model,
+                concise=not wants_detail,
+                focus_mode=None,
+            )
         except IncidentChatError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 3
-        print(answer)
+
+        renderer.print_llm_answer(answer)
 
     return 0
 

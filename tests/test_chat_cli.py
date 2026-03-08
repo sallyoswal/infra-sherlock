@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cli.chat_agent as chat_agent
 from cli.chat_agent import handle_slash_command
 from incident_agent.agent import investigate_incident
+from incident_agent.chat import create_chat_session
 
 
 def test_slash_summary_contains_core_fields() -> None:
     report = investigate_incident("payments_db_timeout", prefer_llm=False)
     output = handle_slash_command("/summary", report)
 
-    assert "Incident:" in output
-    assert "Service:" in output
-    assert "Likely Root Cause:" in output
+    assert "payments-api degraded" in output.lower()
+    assert "confidence" in output.lower()
 
 
 def test_slash_timeline_formats_entries() -> None:
@@ -21,6 +22,13 @@ def test_slash_timeline_formats_entries() -> None:
 
     assert "Incident Timeline:" in output
     assert "[logs]" in output or "[deploy_history]" in output or "[infra_changes]" in output
+
+
+def test_slash_help_returns_command_list() -> None:
+    report = investigate_incident("payments_db_timeout", prefer_llm=False)
+    output = handle_slash_command("/help", report)
+    assert "/summary" in output
+    assert "/root" in output
 
 
 def test_slash_export_writes_markdown(tmp_path: Path) -> None:
@@ -33,3 +41,18 @@ def test_slash_export_writes_markdown(tmp_path: Path) -> None:
     assert "Exported report to:" in output
     content = target.read_text(encoding="utf-8")
     assert "# Payments API timeout spike after network policy change" in content
+
+
+def test_free_text_question_routes_to_llm(monkeypatch) -> None:
+    session = create_chat_session("payments_db_timeout")
+    calls: list[str] = []
+
+    monkeypatch.setattr(chat_agent, "create_chat_session", lambda incident_name, datasets_root: session)
+    monkeypatch.setattr(chat_agent, "ask_incident_question", lambda **kwargs: calls.append(kwargs["question"]) or "ok")
+
+    inputs = iter(["what happened explain to me like a child", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+    code = chat_agent.main(["payments_db_timeout"])
+    assert code == 0
+    assert calls == ["what happened explain to me like a child"]

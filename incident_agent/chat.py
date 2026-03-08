@@ -46,6 +46,8 @@ def ask_incident_question(
     question: str,
     model: str | None = None,
     client: Any | None = None,
+    concise: bool = True,
+    focus_mode: str | None = None,
 ) -> str:
     """Ask a question about the incident using OpenAI with local report context."""
     if not question.strip():
@@ -67,12 +69,17 @@ def ask_incident_question(
             "role": "system",
             "content": (
                 "You are an SRE incident assistant. Answer only using the provided incident report. "
-                "If data is missing, explicitly say what is unknown and what to verify next."
+                "If data is missing, explicitly say what is unknown and what to verify next. "
+                "Prefer concise, operator-friendly responses."
             ),
         },
         {
             "role": "user",
-            "content": f"Incident report context (JSON): {report_json}",
+            "content": (
+                f"Incident report context (JSON): {report_json}\\n"
+                f"Response style: {'2-4 lines max unless asked for details' if concise else 'detailed explanation allowed'}\\n"
+                f"Focus mode: {focus_mode or 'general'}"
+            ),
         },
         *session.history,
         {"role": "user", "content": question},

@@ -1,0 +1,18 @@
+{
+  "incident_id": "payments-api-db-timeout",
+  "service": "payments-api",
+  "team": "payments-platform",
+  "owner": "payments-oncall@company.example",
+  "start_time": "2026-03-06T09:58:20Z",
+  "symptoms": [
+    "Database timeout spikes on write path",
+    "Request latency jump on charge intent endpoint"
+  ],
+  "correlation_ids": ["corr-db-timeout-42", "corr-pg-conn-884"],
+  "upstream_dependencies": ["db-payments-primary", "auth-api"],
+  "downstream_dependencies": ["checkout-api", "billing-worker"],
+  "related_change_ids": ["chg-sg-773", "dep-payments-2026-03-06-1"],
+  "report_summary": "payments-api began failing first with DB timeout errors shortly after a high-risk security-group change.",
+  "environment": "prod",
+  "region": "us-east-1"
+}

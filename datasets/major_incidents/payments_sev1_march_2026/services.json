@@ -1,0 +1,34 @@
+[
+  {
+    "service": "payments-api",
+    "team": "payments-platform",
+    "owner": "payments-oncall@company.example",
+    "tier": "tier-0",
+    "dependencies": ["db-payments-primary", "auth-api"],
+    "critical_user_flows": ["checkout", "card-charge"]
+  },
+  {
+    "service": "checkout-api",
+    "team": "checkout-platform",
+    "owner": "checkout-oncall@company.example",
+    "tier": "tier-0",
+    "dependencies": ["payments-api", "auth-api"],
+    "critical_user_flows": ["checkout"]
+  },
+  {
+    "service": "billing-worker",
+    "team": "billing-platform",
+    "owner": "billing-oncall@company.example",
+    "tier": "tier-1",
+    "dependencies": ["payments-api", "checkout-api", "db-billing"],
+    "critical_user_flows": ["invoice-settlement"]
+  },
+  {
+    "service": "auth-api",
+    "team": "identity-platform",
+    "owner": "identity-oncall@company.example",
+    "tier": "tier-0",
+    "dependencies": ["db-auth"],
+    "critical_user_flows": ["login", "token-refresh"]
+  }
+]

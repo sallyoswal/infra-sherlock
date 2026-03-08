@@ -101,6 +101,11 @@ class TimelineEvent:
     timestamp: str
     event: str
     source: str
+    source_type: str = ""
+    service: str = ""
+    event_type: str = ""
+    summary: str = ""
+    severity: str = ""
 
 
 @dataclass
@@ -116,3 +121,111 @@ class IncidentReport:
     timeline: list[TimelineEvent]
     suggested_remediation: list[str]
     next_investigative_steps: list[str]
+
+
+@dataclass
+class ServiceMetadata:
+    """Ownership and dependency metadata for a service."""
+
+    service: str
+    team: str
+    owner: str
+    tier: str
+    dependencies: list[str]
+    critical_user_flows: list[str]
+
+
+@dataclass
+class ChildIncident:
+    """Service-scoped incident record used in a major incident group."""
+
+    incident_id: str
+    service: str
+    team: str
+    owner: str
+    start_time: str
+    symptoms: list[str]
+    correlation_ids: list[str]
+    upstream_dependencies: list[str]
+    downstream_dependencies: list[str]
+    related_change_ids: list[str]
+    report_summary: str = ""
+    environment: str = "prod"
+    region: str = "us-east-1"
+
+
+@dataclass
+class BlastRadius:
+    """Impacted surface area for a major incident."""
+
+    impacted_services: list[str]
+    impacted_teams: list[str]
+    impacted_user_flows: list[str]
+    impacted_regions: list[str]
+    customer_facing_impact: str
+
+
+@dataclass
+class Hypothesis:
+    """Ranked explanation for major-incident correlation output."""
+
+    title: str
+    description: str
+    supporting_evidence: list[str]
+    contradicting_evidence: list[str]
+    confidence: str
+    likely_role: str
+    likely_affected_services: list[str] = field(default_factory=list)
+
+
+@dataclass
+class IncidentGroup:
+    """Parent incident group spanning multiple child incidents/services."""
+
+    group_id: str
+    title: str
+    status: str
+    severity: str
+    start_time: str
+    end_time: str | None
+    commander: str
+    summary: str
+    child_incident_ids: list[str]
+    suspected_root_services: list[str]
+    blast_radius: BlastRadius
+    global_timeline: list[TimelineEvent] = field(default_factory=list)
+    hypotheses: list[Hypothesis] = field(default_factory=list)
+
+
+@dataclass
+class ServiceIncidentSummary:
+    """Normalized per-service view used during major-incident triage."""
+
+    incident_id: str
+    service: str
+    team: str
+    owner: str
+    first_anomaly: str
+    likely_role: str
+    confidence: str
+    symptoms: list[str]
+    evidence: list[str]
+    correlation_ids: list[str]
+    shared_dependencies: list[str]
+
+
+@dataclass
+class MajorIncidentReport:
+    """Deterministic major-incident triage output."""
+
+    incident_group: IncidentGroup
+    child_incidents: list[ChildIncident]
+    service_metadata: list[ServiceMetadata]
+    service_summaries: list[ServiceIncidentSummary]
+    merged_timeline: list[TimelineEvent]
+    hypotheses: list[Hypothesis]
+    likely_initiating_fault_service: str
+    impacted_services_count: int
+    impacted_teams: list[str]
+    customer_facing_impact: str
+    recommended_next_actions: list[str]
