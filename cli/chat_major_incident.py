@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.env_utils import load_local_env
+from cli.intent_classifier import classify_user_input
 from cli.response_formatter import ChatRenderer
 from incident_agent.loader import IncidentDataError
 from incident_agent.major_incident.chat import (
@@ -114,6 +115,25 @@ def _help() -> str:
     )
 
 
+def _handle_intent(intent: str, raw: str, report) -> tuple[str | None, str]:
+    """Resolve shared intent classifier output into a major-incident response."""
+    if intent == "help":
+        return _help(), "help"
+    if intent == "summary":
+        return _overview(report), "overview"
+    if intent == "timeline":
+        return _timeline(report), "timeline"
+    if intent == "evidence":
+        return _hypotheses(report), "hypotheses"
+    if intent == "remediation":
+        return _next_steps(report), "next-steps"
+    if intent == "root-cause":
+        return _hypotheses(report), "hypotheses"
+    if intent == "question":
+        return None, raw
+    return None, raw
+
+
 def main(argv: list[str] | None = None) -> int:
     load_local_env(PROJECT_ROOT)
     parser = build_parser()
@@ -148,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         cmd = raw.lower()
         if cmd in {"/help", "help"}:
             renderer.print_llm_answer(_help())
+            last_mode = "help"
             continue
         if cmd in {"/overview", "overview", "what happened", "status"}:
             renderer.print_llm_answer(_overview(report))
@@ -178,37 +199,56 @@ def main(argv: list[str] | None = None) -> int:
             renderer.print_llm_answer(_service(report, service_name))
             last_mode = "service"
             continue
-
-        if raw.startswith("/"):
+        if raw.startswith("/") and cmd not in {
+            "/summary",
+            "/root",
+            "/timeline",
+            "/evidence",
+            "/remediation",
+        }:
             renderer.print_llm_answer("Unknown command. Use /help.")
             continue
 
-        # Follow-up memory for short natural prompts.
-        if cmd in {"why", "why?", "show evidence", "evidence"}:
-            renderer.print_llm_answer(_hypotheses(report))
+        # Keep free-form chat as primary for longer natural-language prompts.
+        if not raw.startswith("/") and len(cmd.split()) > 3:
+            intent_result = classify_user_input(raw, last_intent=None)
+            try:
+                answer = ask_major_incident_question(
+                    session=chat_session,
+                    question=raw,
+                    concise=not intent_result.detailed,
+                )
+            except MajorIncidentChatError as exc:
+                renderer.print_llm_answer(f"Error: {exc}")
+                continue
+            renderer.print_llm_answer(answer)
             continue
+
+        intent_result = classify_user_input(raw, last_intent=last_mode if last_mode in {
+            "summary",
+            "root-cause",
+            "timeline",
+            "remediation",
+            "evidence",
+        } else None)
+        rendered, mode = _handle_intent(intent_result.intent, raw, report)
+        if rendered is not None:
+            renderer.print_llm_answer(rendered)
+            if mode in {"overview", "timeline", "hypotheses", "next-steps", "help"}:
+                last_mode = mode
+            continue
+
         if cmd in {"and services?", "services?"}:
             renderer.print_llm_answer(_services(report))
-            continue
-        if cmd in {"details", "more details", "expand"}:
-            if last_mode == "timeline":
-                renderer.print_llm_answer(_timeline(report))
-            elif last_mode == "services":
-                renderer.print_llm_answer(_services(report))
-            else:
-                renderer.print_llm_answer(_overview(report))
+            last_mode = "services"
             continue
 
         # Free chat fallback for non-command input.
-        wants_detail = any(
-            token in cmd
-            for token in ("detail", "detailed", "explain", "deep", "deeper", "expand", "elaborate")
-        )
         try:
             answer = ask_major_incident_question(
                 session=chat_session,
                 question=raw,
-                concise=not wants_detail,
+                concise=not intent_result.detailed,
             )
         except MajorIncidentChatError as exc:
             renderer.print_llm_answer(f"Error: {exc}")
