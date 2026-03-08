@@ -46,7 +46,7 @@ def _infer_root_cause(
         change = infra.latest_change
         return (
             f"High-risk {change.change_type} to {change.component} at {change.timestamp} "
-            f"likely caused {logs.db_timeout_events} DB timeout events and rising latency."
+            f"likely caused {logs.db_timeout_events} DB timeout events."
         )
     if deploys.latest_deploy and metrics.error_rate_rising:
         deploy = deploys.latest_deploy
