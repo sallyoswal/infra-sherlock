@@ -93,6 +93,12 @@ AI-first watch mode (detect -> diagnose -> notify):
 python cli/watch_incidents.py payments_db_timeout --once
 ```
 
+Dry-run cloud collection preview (no cloud API calls):
+
+```bash
+python cli/watch_incidents.py payments_db_timeout --detect-and-notify --dry-run
+```
+
 Major-incident chat commands:
 
 - `/overview`
@@ -116,6 +122,12 @@ Infra Sherlock now runs in AI-only mode for incident investigation and chat.
 Provider configuration is controlled via `.env` (`LLM_PROVIDER=openai|openrouter`).
 
 Cloud connectors and notifications remain optional plugins.
+
+Current cloud connectors:
+
+- AWS CloudWatch plugin: read-only `filter_log_events` collection.
+- Datadog plugin: read-only Events API collection.
+- Slack notifier: outgoing webhook alerts with dedupe state.
 
 ## Major Incident Mode
 
@@ -180,13 +192,15 @@ flowchart TD
 │   ├── major_incident.py
 │   ├── response_formatter.py
 │   ├── run_agent.py
+│   ├── run_mcp_server.py
 │   └── watch_incidents.py
 ├── config/
 │   ├── plugins.yaml
 │   └── routing.yaml
 ├── datasets/
 │   └── incidents/
-│       └── payments_db_timeout/
+│       ├── payments_db_timeout/
+│       └── deploy_regression/
 ├── datasets/
 │   └── major_incidents/
 │       └── payments_sev1_march_2026/
@@ -253,7 +267,24 @@ pytest -q
 
 ## MCP Compatibility
 
-Infra Sherlock ships a minimal MCP wrapper (`incident_agent/mcp/wrapper.py`) for exposing `investigate_incident` as a tool payload.
+Infra Sherlock now includes a real MCP server based on the MCP Python SDK.
+
+Run over stdio:
+
+```bash
+python cli/run_mcp_server.py
+```
+
+Provided MCP tools:
+
+- `investigate_incident`
+- `get_incident_timeline`
+- `get_incident_remediation`
+
+Implementation:
+
+- Server: `incident_agent/mcp/server.py`
+- Wrapper utilities: `incident_agent/mcp/wrapper.py`
 
 ## Example Major-Incident Session
 
