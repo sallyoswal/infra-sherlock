@@ -1,18 +1,22 @@
 # Infra Sherlock
 
-Infra Sherlock is an AI-powered incident investigation tool that simulates how an SRE analyzes production outages by correlating logs, metrics, deploy history, and infrastructure changes.
-
-Local-first by default, with a practical terminal workflow for day-to-day incident analysis.
+Infra Sherlock is an AI-powered incident investigation tool for production incident triage.
+It correlates cloud telemetry, change signals, and ownership routes, then produces a structured incident report and optional Slack notification.
 ![Infra Sherlock CLI Chat Screenshot](assets/cli-chat-screenshot.svg)
 
 ## Why It Matters
 
-Infra Sherlock is a practical incident response project that runs without requiring production cloud accounts.
+Infra Sherlock is built for two explicit operating modes:
 
-- Correlates multi-signal telemetry (logs, metrics, deploys, infra changes)
+- `cloud` mode: production path using configured collectors/notifiers (no dataset dependency)
+- `local` mode: test path using local incident fixtures
+
+Core capabilities:
+
+- Correlates multi-signal telemetry (cloud events, logs, metrics, deploy/change context)
 - Produces structured root-cause reports with confidence and timeline
-- Uses AI-only runtime for single-incident investigation and chat
 - Supports OpenAI/OpenRouter provider configuration
+- Sends optional Slack notifications with dedupe
 
 ## Chat Usage
 
@@ -23,26 +27,6 @@ python cli/chat_agent.py payments_db_timeout
 ```
 
 `chat_agent.py` runs in AI-only mode and requires LLM credentials in `.env`.
-
-Example:
-
-```text
-> what happened?
-payments-api degraded due to DB connectivity issues after a network security change.
-Most likely cause: DB ingress restriction introduced connectivity delays.
-Confidence: 0.99
-
-> timeline
-09:54 Deploy 2026.03.06.1 to payments-api
-09:58 Infra change restricted inbound DB access
-10:04 First DB timeout error observed
-
-> why do we think its network?
-- 5 database timeout log events
-- error rate increased to 4.10%
-- p95 latency increased to 1280ms
-- infra change modified DB ingress rules
-```
 
 Built-in chat shortcuts:
 
@@ -57,22 +41,22 @@ Built-in chat shortcuts:
 
 ## CLI Commands
 
-Investigation report:
+Cloud investigation report (production path):
 
 ```bash
-python cli/run_agent.py investigate payments_db_timeout
+python cli/run_agent.py investigate prod-incident-1 --mode cloud --service-name payments-api
 ```
 
-Markdown export:
+Cloud dry-run investigation (no cloud API calls):
 
 ```bash
-python cli/run_agent.py investigate payments_db_timeout --output reports/payments_db_timeout.md
+PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate prod-incident-1 --mode cloud --service-name payments-api
 ```
 
-Quiet export:
+Local fixture investigation (test/dev path):
 
 ```bash
-python cli/run_agent.py investigate payments_db_timeout --output reports/payments_db_timeout.md --quiet
+python cli/run_agent.py investigate payments_db_timeout --mode local
 ```
 
 Major-incident triage:
@@ -90,13 +74,13 @@ python cli/chat_major_incident.py payments_sev1_march_2026
 AI-first watch mode (detect -> diagnose -> notify):
 
 ```bash
-python cli/watch_incidents.py payments_db_timeout --once
+python cli/watch_incidents.py prod-incident-1 --detect-and-notify
 ```
 
 Dry-run cloud collection preview (no cloud API calls):
 
 ```bash
-python cli/watch_incidents.py payments_db_timeout --detect-and-notify --dry-run
+python cli/watch_incidents.py prod-incident-1 --detect-and-notify --dry-run
 ```
 
 Major-incident chat commands:
@@ -121,7 +105,7 @@ Infra Sherlock now runs in AI-only mode for incident investigation and chat.
 
 Provider configuration is controlled via `.env` (`LLM_PROVIDER=openai|openrouter`).
 
-Cloud connectors and notifications remain optional plugins.
+Cloud connectors and notifications are configured through plugins.
 
 Current cloud connectors:
 
@@ -173,7 +157,7 @@ flowchart TD
     K --> L[Incident Channel: likely cause + evidence + next actions]
 ```
 
-Local / test flow:
+Local / test flow (non-production):
 
 ```mermaid
 flowchart TD
@@ -258,19 +242,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optional environment setup:
+Environment setup:
 
 ```bash
 cp .env.example .env
 ```
 
-Enable cloud plugins (optional):
+Enable cloud plugins (production mode):
 
 ```bash
 # edit config/plugins.yaml
 # mode: cloud
 # collectors: [aws_cloudwatch, datadog]
 # notifiers: [slack]
+```
+
+`run_agent.py investigate` requires explicit mode selection:
+
+```bash
+python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
+python cli/run_agent.py investigate <fixture-name> --mode local
 ```
 
 Routing setup for ownership + Slack channels:
