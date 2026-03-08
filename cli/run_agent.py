@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from incident_agent.agent import investigate_incident
 from incident_agent.loader import IncidentDataError
 from incident_agent.models import IncidentReport
+from incident_agent.reasoning.llm_reasoner import LLMReasonerError
 from cli.env_utils import load_local_env
 
 try:
@@ -148,6 +149,9 @@ def main(argv: list[str] | None = None) -> int:
         except IncidentDataError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
+        except LLMReasonerError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 3
         if not args.quiet:
             _render_report(report)
         if args.output:
@@ -158,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"Markdown report written to: {args.output}")
             except OSError as exc:
                 print(f"Error writing markdown report: {exc}", file=sys.stderr)
-                return 3
+                return 4
         return 0
 
     parser.print_help()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from incident_agent import agent
 from incident_agent.models import IncidentReport, TimelineEvent
 
@@ -37,7 +39,7 @@ def test_agent_uses_llm_when_api_key_present(monkeypatch) -> None:
     assert report.likely_root_cause == "Synthetic LLM root cause"
 
 
-def test_agent_falls_back_when_llm_fails(monkeypatch) -> None:
+def test_agent_raises_when_llm_fails(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
@@ -46,5 +48,5 @@ def test_agent_falls_back_when_llm_fails(monkeypatch) -> None:
 
     monkeypatch.setattr(agent, "build_report_with_llm", _raise_llm_error)
 
-    report = agent.investigate_incident("payments_db_timeout")
-    assert "network" in report.likely_root_cause.lower() or "db" in report.likely_root_cause.lower()
+    with pytest.raises(agent.LLMReasonerError):
+        agent.investigate_incident("payments_db_timeout")

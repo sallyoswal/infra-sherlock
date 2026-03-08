@@ -141,8 +141,10 @@ class ChatRenderer:
             self.Table = None
             self.has_rich = False
 
-    def print_startup(self, report: IncidentReport) -> None:
-        summary = build_local_payload(report, intent="summary", detailed=False)
+    def print_startup(self, report: IncidentReport, startup_summary: str | None = None) -> None:
+        summary_lines = startup_summary.strip() if startup_summary else "\n".join(
+            build_local_payload(report, intent="summary", detailed=False).lines
+        )
         commands = "/summary  /root  /timeline  /evidence  /remediation  /help  /exit"
         banner = (
             "██╗███╗   ██╗███████╗██████╗  █████╗\n"
@@ -165,12 +167,12 @@ class ChatRenderer:
             print(f"Investigating incident: {report.incident_name}")
             print("")
             print("Summary:")
-            print("\n".join(summary.lines))
+            print(summary_lines)
             print("")
             print(f"Commands: {commands}")
             return
 
-        body = "\n".join(summary.lines)
+        body = summary_lines
         self.console.print(f"[bold cyan]{banner}[/bold cyan]")
         self.console.print(self.Panel(body, title="Infra Sherlock", subtitle=f"Incident: {report.incident_name}", border_style="cyan"))
         self.console.print(f"[bold yellow]Commands:[/bold yellow] {commands}")

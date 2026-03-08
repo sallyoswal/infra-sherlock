@@ -23,6 +23,8 @@ Run interactive chat:
 python cli/chat_agent.py payments_db_timeout
 ```
 
+`chat_agent.py` runs in AI-only mode and requires LLM credentials in `.env`.
+
 Example:
 
 ```text
@@ -86,6 +88,12 @@ Major-incident command chat:
 python cli/chat_major_incident.py payments_sev1_march_2026
 ```
 
+AI-first watch mode (detect -> diagnose -> notify):
+
+```bash
+python cli/watch_incidents.py payments_db_timeout --once
+```
+
 Major-incident chat commands:
 
 - `/overview`
@@ -98,21 +106,17 @@ Major-incident chat commands:
 - `/help`
 - `/exit`
 
-## Deterministic vs LLM Modes
+## AI-Only Runtime Mode
 
-Deterministic mode (default local-first behavior):
+Infra Sherlock now runs in AI-only mode for incident investigation and chat.
 
-- No API key required
-- Explicit heuristics and correlation logic
-- Stable, reproducible output for demos/tests
-
-LLM mode (optional):
-
-- Uses provider credentials when configured
-- Produces conversational responses and synthesis
-- Strict response validation and automatic fallback to deterministic mode on failure
+- API credentials are required (`OPENAI_API_KEY` or `OPENROUTER_API_KEY`)
+- `run_agent.py` and `chat_agent.py` return an error if credentials are missing
+- No deterministic fallback is used at runtime for single-incident investigation
 
 Provider configuration is controlled via `.env` (`LLM_PROVIDER=openai|openrouter`).
+
+Cloud connectors and notifications remain optional plugins.
 
 ## Major Incident Mode
 
@@ -121,6 +125,9 @@ Major incident mode adds a parent/child incident architecture for cross-team tri
 - Parent incident group (`IncidentGroup`) tracks severity, status, commander, blast radius, and hypotheses.
 - Child incidents (`ChildIncident`) represent service-scoped failures with ownership and dependencies.
 - Deterministic correlation engine merges timelines, ranks hypotheses, and infers likely initiating fault vs downstream impact.
+- Infrastructure-aware correlation attributes suspicious `ChangeEvent` objects and identifies likely failing infrastructure layer.
+- Region/AZ-aware blast radius logic distinguishes localized vs broader impact scope.
+- Failure-pattern matching maps incidents to known cloud patterns (e.g., `db_connectivity_failure`, `security_group_regression`) with explainable evidence.
 
 ### Deterministic Correlation Heuristics
 
@@ -129,6 +136,8 @@ Major incident mode adds a parent/child incident architecture for cross-team tri
 - shared dependency failures increase correlation strength
 - downstream timeout/upstream symptom patterns reduce root-cause likelihood for later services
 - nearby deploys remain alternate hypotheses but do not automatically dominate shared dependency/infra evidence
+- region/AZ concentration increases confidence for localized infrastructure faults
+- healthy bounded dependency paths reduce assumptions of global/regional outages
 
 Confidence is reported using buckets (`high`, `medium`, `low`) with supporting/contradicting evidence strings.
 
@@ -136,7 +145,7 @@ Confidence is reported using buckets (`high`, `medium`, `low`) with supporting/c
 
 ```mermaid
 flowchart TD
-    A[CLI: run_agent.py / chat_agent.py] --> B[Agent Orchestrator]
+    A[CLI: run_agent.py / chat_agent.py / watch_incidents.py] --> B[Agent Orchestrator]
     B --> C[logs_tool.py]
     B --> D[metrics_tool.py]
     B --> E[deploy_tool.py]
@@ -149,6 +158,9 @@ flowchart TD
     H --> I[Timeline + Evidence + Remediation]
     B --> J[Optional LLM Reasoner / Chat]
     J --> H
+    B --> K[Optional Plugin Registry]
+    K --> L[AWS/Datadog Collectors]
+    K --> M[Slack Notifier]
 ```
 
 ## Repository Layout
@@ -163,10 +175,16 @@ flowchart TD
 │   └── cli-chat-screenshot.svg
 ├── cli/
 │   ├── chat_agent.py
+│   ├── chat_major_incident.py
 │   ├── env_utils.py
 │   ├── intent_classifier.py
+│   ├── major_incident.py
 │   ├── response_formatter.py
-│   └── run_agent.py
+│   ├── run_agent.py
+│   └── watch_incidents.py
+├── config/
+│   ├── plugins.yaml
+│   └── routing.yaml
 ├── datasets/
 │   └── incidents/
 │       └── payments_db_timeout/
@@ -175,19 +193,27 @@ flowchart TD
 │       └── payments_sev1_march_2026/
 │           ├── incident_group.json
 │           ├── services.json
+│           ├── infrastructure.json
+│           ├── change_events.json
+│           ├── failure_patterns.json
 │           ├── child_incidents/
 │           └── evidence/
 ├── incident_agent/
 │   ├── agent.py
 │   ├── chat.py
 │   ├── llm_provider.py
+│   ├── notifications/
+│   ├── plugins/
+│   ├── routing.py
 │   ├── major_incident/
 │   │   ├── loader.py
 │   │   └── correlator.py
 │   ├── models.py
 │   ├── reasoning/
 │   ├── tools/
-│   └── mcp/
+│   ├── mcp/
+│   └── watch.py
+├── state/
 └── tests/
 ```
 
@@ -203,6 +229,21 @@ Optional environment setup:
 
 ```bash
 cp .env.example .env
+```
+
+Enable cloud plugins (optional):
+
+```bash
+# edit config/plugins.yaml
+# mode: cloud
+# collectors: [aws_cloudwatch, datadog]
+# notifiers: [slack]
+```
+
+Routing setup for ownership + Slack channels:
+
+```bash
+# edit config/routing.yaml
 ```
 
 ## Testing
@@ -229,6 +270,14 @@ Top hypothesis: Network/security-group path change degraded DB connectivity
 - checkout-api (checkout-platform) first=10:02 role=downstream confidence=medium
 - billing-worker (billing-platform) first=10:06 role=downstream confidence=low
 ```
+
+## Cloud/SRE Questions This Can Answer
+
+- Which infrastructure layer most likely failed first?
+- Which change event is most suspicious near incident onset?
+- Is this localized to one region/AZ or broader?
+- Is this primarily a service bug or infrastructure fault?
+- What is the single fastest validation check to confirm the top hypothesis?
 
 ## Suggested GitHub Topics
 

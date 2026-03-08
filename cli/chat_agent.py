@@ -14,11 +14,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli.env_utils import load_local_env
 from cli.response_formatter import (
     ChatRenderer,
-    build_local_payload,
     export_report_to_path,
 )
 from incident_agent.chat import IncidentChatError, ask_incident_question, create_chat_session
 from incident_agent.loader import IncidentDataError
+from incident_agent.llm_provider import get_provider, has_llm_credentials
 from incident_agent.models import IncidentReport
 
 
@@ -41,24 +41,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def handle_slash_command(command: str, report: IncidentReport) -> str:
-    """Backward-compatible command helper used by tests and automation."""
+    """Backward-compatible command helper used by tests and automation.
+
+    In AI-only mode, slash commands are translated into focused prompts.
+    """
     if command == "/summary":
-        payload = build_local_payload(report, intent="summary")
-        return "\n".join(payload.lines)
+        return "Summarize this incident in 2-4 lines for an on-call engineer."
     if command in {"/root", "/root-cause"}:
-        payload = build_local_payload(report, intent="root-cause")
-        return "\n".join(payload.lines)
+        return "What is the most likely root cause? Keep it to 2-4 lines."
     if command == "/timeline":
-        payload = build_local_payload(report, intent="timeline", detailed=True)
-        return "Incident Timeline:\n" + "\n".join(
-            f"- {item.timestamp} [{item.source}] {item.event}" for item in payload.timeline or []
-        )
+        return "Show the incident timeline as concise bullet points with timestamps."
     if command == "/evidence":
-        payload = build_local_payload(report, intent="evidence")
-        return "Key Evidence:\n" + "\n".join(payload.lines)
+        return "List the strongest evidence supporting the current root-cause hypothesis."
     if command == "/remediation":
-        payload = build_local_payload(report, intent="remediation")
-        return "Suggested Remediation:\n" + "\n".join(payload.lines)
+        return "Give the top remediation actions in priority order."
     if command.startswith("/export "):
         output_path = Path(command.split(" ", 1)[1].strip())
         export_report_to_path(report, output_path)
@@ -74,6 +70,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if not has_llm_credentials():
+        print(
+            f"Error: AI-only chat mode requires LLM credentials (provider={get_provider()}).",
+            file=sys.stderr,
+        )
+        return 3
+
     try:
         session = create_chat_session(
             incident_name=args.incident_name,
@@ -84,7 +87,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     renderer = ChatRenderer()
-    renderer.print_startup(session.report)
+    try:
+        startup_summary = ask_incident_question(
+            session=session,
+            question="Give a concise startup overview: what happened, likely cause, and confidence in 2-4 lines.",
+            model=args.model,
+            concise=True,
+            focus_mode="summary",
+        )
+    except IncidentChatError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 3
+    renderer.print_startup(session.report, startup_summary=startup_summary)
 
     while True:
         try:
@@ -114,23 +128,24 @@ def main(argv: list[str] | None = None) -> int:
 
         if user_text.startswith("/"):
             command_output = handle_slash_command(user_text, session.report)
+            if command_output.startswith("Exported report"):
+                renderer.print_llm_answer(command_output)
+                continue
             if command_output.startswith("Unknown command"):
                 renderer.print_llm_answer(command_output)
                 continue
-            # Keep compatibility with existing slash command behavior.
-            if user_text.lower() in {"/summary", "/root", "/root-cause", "/timeline", "/evidence", "/remediation"}:
-                if user_text.lower() in {"/summary"}:
-                    renderer.print_payload(build_local_payload(session.report, intent="summary"))
-                elif user_text.lower() in {"/root", "/root-cause"}:
-                    renderer.print_payload(build_local_payload(session.report, intent="root-cause"))
-                elif user_text.lower() in {"/timeline"}:
-                    renderer.print_payload(build_local_payload(session.report, intent="timeline", detailed=True))
-                elif user_text.lower() in {"/evidence"}:
-                    renderer.print_payload(build_local_payload(session.report, intent="evidence"))
-                elif user_text.lower() in {"/remediation"}:
-                    renderer.print_payload(build_local_payload(session.report, intent="remediation"))
-                continue
-            renderer.print_llm_answer("Unknown command. Use /help for available commands.")
+            try:
+                answer = ask_incident_question(
+                    session=session,
+                    question=command_output,
+                    model=args.model,
+                    concise=True,
+                    focus_mode=user_text.lstrip("/"),
+                )
+            except IncidentChatError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 3
+            renderer.print_llm_answer(answer)
             continue
 
         wants_detail = any(

@@ -61,7 +61,5 @@ def test_ask_incident_question_requires_api_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    session = create_chat_session("payments_db_timeout")
-
     with pytest.raises(IncidentChatError):
-        ask_incident_question(session=session, question="Any summary?")
+        create_chat_session("payments_db_timeout")

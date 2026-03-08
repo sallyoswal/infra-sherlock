@@ -12,16 +12,16 @@ def test_slash_summary_contains_core_fields() -> None:
     report = investigate_incident("payments_db_timeout", prefer_llm=False)
     output = handle_slash_command("/summary", report)
 
-    assert "payments-api degraded" in output.lower()
-    assert "confidence" in output.lower()
+    assert "summarize this incident" in output.lower()
+    assert "2-4 lines" in output.lower()
 
 
 def test_slash_timeline_formats_entries() -> None:
     report = investigate_incident("payments_db_timeout", prefer_llm=False)
     output = handle_slash_command("/timeline", report)
 
-    assert "Incident Timeline:" in output
-    assert "[logs]" in output or "[deploy_history]" in output or "[infra_changes]" in output
+    assert "timeline" in output.lower()
+    assert "timestamps" in output.lower()
 
 
 def test_slash_help_returns_command_list() -> None:
@@ -47,6 +47,7 @@ def test_free_text_question_routes_to_llm(monkeypatch) -> None:
     session = create_chat_session("payments_db_timeout")
     calls: list[str] = []
 
+    monkeypatch.setattr(chat_agent, "has_llm_credentials", lambda: True)
     monkeypatch.setattr(chat_agent, "create_chat_session", lambda incident_name, datasets_root: session)
     monkeypatch.setattr(chat_agent, "ask_incident_question", lambda **kwargs: calls.append(kwargs["question"]) or "ok")
 
@@ -55,4 +56,13 @@ def test_free_text_question_routes_to_llm(monkeypatch) -> None:
 
     code = chat_agent.main(["payments_db_timeout"])
     assert code == 0
-    assert calls == ["what happened explain to me like a child"]
+    assert len(calls) == 2
+    assert "startup overview" in calls[0].lower()
+    assert calls[1] == "what happened explain to me like a child"
+
+
+def test_chat_requires_llm_credentials(monkeypatch) -> None:
+    monkeypatch.setattr(chat_agent, "has_llm_credentials", lambda: False)
+
+    code = chat_agent.main(["payments_db_timeout"])
+    assert code == 3

@@ -32,11 +32,12 @@ def create_chat_session(
     incident_name: str,
     datasets_root: Path | None = None,
 ) -> IncidentChatSession:
-    """Build chat context from the local incident report."""
+    """Build chat context from an AI-generated incident report."""
+    if not has_llm_credentials():
+        raise IncidentChatError("No LLM credentials found for the selected provider.")
     report = investigate_incident(
         incident_name=incident_name,
         datasets_root=datasets_root,
-        prefer_llm=False,
     )
     return IncidentChatSession(report=report)
 
