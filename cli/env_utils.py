@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 
 
-def load_local_env(project_root: Path, env_file: Path | None = None) -> None:
+def load_local_env(
+    project_root: Path,
+    env_file: Path | None = None,
+    warn_missing: bool = False,
+) -> None:
     """Load simple KEY=VALUE pairs from a local .env file if present."""
     target = env_file or (project_root / ".env")
     if not target.exists():
+        if warn_missing:
+            warnings.warn(f".env file not found at {target}", stacklevel=2)
         return
 
     for raw_line in target.read_text(encoding="utf-8").splitlines():
