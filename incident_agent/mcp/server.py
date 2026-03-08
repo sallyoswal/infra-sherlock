@@ -32,17 +32,18 @@ def create_mcp_app(datasets_root: Path | None = None):
         ) from exc
 
     app = FastMCP("infra-sherlock")
+    report_cache: dict[str, dict[str, Any]] = {}
 
-    @app.tool(
-        name="investigate_incident",
-        description="Investigate an incident and return a structured report.",
-    )
-    def investigate_incident_tool(incident_name: str) -> dict[str, Any]:
+    def _get_or_build_payload(incident_name: str) -> dict[str, Any]:
+        cached = report_cache.get(incident_name)
+        if cached is not None:
+            return cached
+
         report = investigate_incident(
             incident_name=incident_name,
             datasets_root=datasets_root,
         )
-        return {
+        payload = {
             "incident_name": report.incident_name,
             "incident_title": report.incident_title,
             "service_name": report.service_name,
@@ -60,13 +61,22 @@ def create_mcp_app(datasets_root: Path | None = None):
             "suggested_remediation": report.suggested_remediation,
             "next_investigative_steps": report.next_investigative_steps,
         }
+        report_cache[incident_name] = payload
+        return payload
+
+    @app.tool(
+        name="investigate_incident",
+        description="Investigate an incident and return a structured report.",
+    )
+    def investigate_incident_tool(incident_name: str) -> dict[str, Any]:
+        return _get_or_build_payload(incident_name)
 
     @app.tool(
         name="get_incident_timeline",
         description="Return timeline entries for a specific incident.",
     )
     def get_incident_timeline(incident_name: str) -> list[dict[str, Any]]:
-        payload = investigate_incident_tool(incident_name)
+        payload = _get_or_build_payload(incident_name)
         return _extract_timeline(payload)
 
     @app.tool(
@@ -74,7 +84,7 @@ def create_mcp_app(datasets_root: Path | None = None):
         description="Return suggested remediation steps for a specific incident.",
     )
     def get_incident_remediation(incident_name: str) -> list[str]:
-        payload = investigate_incident_tool(incident_name)
+        payload = _get_or_build_payload(incident_name)
         return _extract_remediation(payload)
 
     return app
