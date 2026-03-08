@@ -67,38 +67,30 @@ def build_report(
         )
 
     timeline: list[TimelineEvent] = []
-    if deploys.latest_deploy:
+
+    for deploy in deploys.records:
         timeline.append(
             TimelineEvent(
-                timestamp=deploys.latest_deploy.timestamp,
-                event=f"Deploy {deploys.latest_deploy.version} to {deploys.latest_deploy.service}",
+                timestamp=deploy.timestamp,
+                event=f"Deploy {deploy.version} to {deploy.service}",
                 source="deploy_history",
             )
         )
-    if infra.latest_change:
+
+    for change in infra.changes:
         timeline.append(
             TimelineEvent(
-                timestamp=infra.latest_change.timestamp,
-                event=f"Infra change: {infra.latest_change.details}",
+                timestamp=change.timestamp,
+                event=f"Infra change ({change.risk_level}): {change.details}",
                 source="infra_changes",
             )
         )
-    if metrics.points:
+
+    for log_event in logs.timeline_events:
         timeline.append(
             TimelineEvent(
-                timestamp=metrics.points[-1].timestamp,
-                event=(
-                    f"Metrics degradation observed (error_rate={metrics.points[-1].error_rate:.2f}%, "
-                    f"p95={metrics.points[-1].p95_latency_ms:.0f}ms)"
-                ),
-                source="metrics",
-            )
-        )
-    if logs.last_timestamp:
-        timeline.append(
-            TimelineEvent(
-                timestamp=logs.last_timestamp,
-                event="Repeated DB timeout errors present in application logs",
+                timestamp=log_event.timestamp,
+                event=f"{log_event.level} log: {log_event.message}",
                 source="logs",
             )
         )

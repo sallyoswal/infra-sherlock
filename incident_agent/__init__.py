@@ -1,4 +1,4 @@
-"""AI Infra First Responder package."""
+"""Infra Sherlock package."""
 
 from incident_agent.agent import investigate_incident
 

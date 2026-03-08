@@ -1,4 +1,4 @@
-"""CLI entrypoint for AI Infra First Responder."""
+"""CLI entrypoint for Infra Sherlock."""
 
 from __future__ import annotations
 
@@ -73,9 +73,35 @@ def _render_report(report: IncidentReport) -> None:
     console.print(next_steps_table)
 
 
+def _report_to_markdown(report: IncidentReport) -> str:
+    """Convert a report into markdown text for sharing/export."""
+    lines: list[str] = [
+        f"# {report.incident_title}",
+        "",
+        f"- **Incident Name:** `{report.incident_name}`",
+        f"- **Service:** `{report.service_name}`",
+        f"- **Likely Root Cause:** {report.likely_root_cause}",
+        f"- **Confidence:** {report.confidence:.2f}",
+        "",
+        "## Key Evidence",
+    ]
+    lines.extend(f"- {item}" for item in report.key_evidence)
+    lines.append("")
+    lines.append("## Incident Timeline")
+    lines.extend(f"- `{event.timestamp}` [{event.source}] {event.event}" for event in report.timeline)
+    lines.append("")
+    lines.append("## Suggested Remediation")
+    lines.extend(f"- {item}" for item in report.suggested_remediation)
+    lines.append("")
+    lines.append("## Next Investigative Steps")
+    lines.extend(f"- {item}" for item in report.next_investigative_steps)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser."""
-    parser = argparse.ArgumentParser(prog="run_agent")
+    parser = argparse.ArgumentParser(prog="infra-sherlock")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     investigate_parser = subparsers.add_parser("investigate", help="Investigate an incident")
@@ -85,6 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(__file__).resolve().parents[1] / "datasets" / "incidents",
         help="Path to incidents dataset root",
+    )
+    investigate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path to export the report as markdown (e.g. report.md)",
     )
 
     return parser
@@ -105,6 +137,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
         _render_report(report)
+        if args.output:
+            try:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(_report_to_markdown(report), encoding="utf-8")
+                print(f"Markdown report written to: {args.output}")
+            except OSError as exc:
+                print(f"Error writing markdown report: {exc}", file=sys.stderr)
+                return 3
         return 0
 
     parser.print_help()

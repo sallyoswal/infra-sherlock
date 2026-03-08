@@ -12,3 +12,4 @@ def test_analyze_logs_extracts_timeout_signals() -> None:
     assert result.db_timeout_events >= 3
     assert result.first_timestamp is not None
     assert result.last_timestamp is not None
+    assert len(result.timeline_events) >= 4

@@ -15,6 +15,15 @@ class IncidentMetadata:
 
 
 @dataclass
+class LogEvent:
+    """Single log event retained for timeline reconstruction."""
+
+    timestamp: str
+    level: str
+    message: str
+
+
+@dataclass
 class LogAnalysis:
     """Summary extracted from log events."""
 
@@ -24,6 +33,7 @@ class LogAnalysis:
     first_timestamp: str | None
     last_timestamp: str | None
     sample_timeout_messages: list[str] = field(default_factory=list)
+    timeline_events: list[LogEvent] = field(default_factory=list)
 
 
 @dataclass

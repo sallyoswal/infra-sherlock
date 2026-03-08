@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from incident_agent.models import LogAnalysis
+from incident_agent.models import LogAnalysis, LogEvent
 
 
 class LogsToolError(Exception):
@@ -23,6 +23,7 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
     first_ts: str | None = None
     last_ts: str | None = None
     timeout_samples: list[str] = []
+    timeline_events: list[LogEvent] = []
 
     for raw_line in logs_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -52,6 +53,14 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
             if len(timeout_samples) < 3:
                 timeout_samples.append(message)
 
+        # Keep timeline-focused log entries: errors/critical, timeout events, and deploy completion markers.
+        if (
+            level in {"ERROR", "CRITICAL"}
+            or ("timeout" in lowered and "db" in lowered)
+            or ("deploy" in lowered and "completed" in lowered)
+        ):
+            timeline_events.append(LogEvent(timestamp=ts, level=level, message=message))
+
     return LogAnalysis(
         total_events=total_events,
         error_events=error_events,
@@ -59,4 +68,5 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
         first_timestamp=first_ts,
         last_timestamp=last_ts,
         sample_timeout_messages=timeout_samples,
+        timeline_events=timeline_events,
     )
