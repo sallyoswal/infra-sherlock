@@ -6,6 +6,7 @@ from incident_agent import agent
 from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
 from incident_agent.plugins.base import IncidentContext
 from incident_agent.plugins.datadog import DatadogPlugin
+from incident_agent.plugins.pagerduty import PagerDutyPlugin
 from incident_agent.plugins.registry import PluginConfig, build_collectors, build_notifiers
 
 
@@ -28,11 +29,11 @@ def test_registry_local_mode_returns_no_plugins() -> None:
 
 
 def test_registry_cloud_mode_instantiates_known_plugins() -> None:
-    cfg = PluginConfig(mode="cloud", collectors=["aws_cloudwatch", "datadog"], notifiers=["slack"])
+    cfg = PluginConfig(mode="cloud", collectors=["aws_cloudwatch", "datadog", "pagerduty"], notifiers=["slack"])
     collectors = build_collectors(cfg)
     notifiers = build_notifiers(cfg)
 
-    assert [plugin.name for plugin in collectors] == ["aws_cloudwatch", "datadog"]
+    assert [plugin.name for plugin in collectors] == ["aws_cloudwatch", "datadog", "pagerduty"]
     assert [plugin.name for plugin in notifiers] == ["slack"]
 
 
@@ -130,3 +131,27 @@ def test_datadog_plugin_collects_matching_events(monkeypatch) -> None:
     assert "returned 1 matching events" in result.key_evidence[0]
     assert len(result.timeline_events) == 1
     assert result.timeline_events[0].source == "plugin:datadog"
+
+
+def test_pagerduty_plugin_collects_matching_incidents(monkeypatch) -> None:
+    monkeypatch.setenv("PAGERDUTY_API_TOKEN", "x")
+
+    payload = (
+        b'{\"incidents\": ['
+        b'{\"title\": \"payments-api high error rate\", \"summary\": \"prod incident\", \"status\": \"triggered\", \"urgency\": \"high\", \"created_at\": \"2026-03-08T14:10:00Z\"},'
+        b'{\"title\": \"other service alert\", \"summary\": \"healthy\", \"status\": \"acknowledged\", \"urgency\": \"low\", \"created_at\": \"2026-03-08T14:12:00Z\"}'
+        b"]}"
+    )
+
+    plugin = PagerDutyPlugin(http_get=lambda url, headers: payload)
+    context = IncidentContext(
+        incident_name="prod-incident-1",
+        service_name="payments-api",
+        incident_dir=Path("."),
+    )
+    result = plugin.collect(context)
+
+    assert result.key_evidence
+    assert "returned 1 matching incidents" in result.key_evidence[0]
+    assert len(result.timeline_events) == 1
+    assert result.timeline_events[0].source == "plugin:pagerduty"

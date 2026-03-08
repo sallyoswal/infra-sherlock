@@ -1,7 +1,7 @@
 # local = no external APIs; cloud = enable configured plugins.
 mode: local
 
-# Optional collectors (used only when mode=cloud): aws_cloudwatch, datadog
+# Optional collectors (used only when mode=cloud): aws_cloudwatch, datadog, pagerduty
 collectors: []
 
 # Optional notifiers (used only when mode=cloud): slack

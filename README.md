@@ -44,13 +44,13 @@ Built-in chat shortcuts:
 Cloud investigation report (production path):
 
 ```bash
-python cli/run_agent.py investigate prod-incident-1 --mode cloud --service-name payments-api
+python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
 ```
 
 Cloud dry-run investigation (no cloud API calls):
 
 ```bash
-PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate prod-incident-1 --mode cloud --service-name payments-api
+PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
 ```
 
 Local fixture investigation (test/dev path):
@@ -74,14 +74,17 @@ python cli/chat_major_incident.py payments_sev1_march_2026
 AI-first watch mode (detect -> diagnose -> notify):
 
 ```bash
-python cli/watch_incidents.py prod-incident-1 --detect-and-notify
+python cli/watch_incidents.py <incident-id> --detect-and-notify
 ```
 
 Dry-run cloud collection preview (no cloud API calls):
 
 ```bash
-python cli/watch_incidents.py prod-incident-1 --detect-and-notify --dry-run
+python cli/watch_incidents.py <incident-id> --detect-and-notify --dry-run
 ```
+
+In production, `incident-id` is typically sourced from your alerting/event system
+(PagerDuty incident key, Datadog monitor alert ID, internal incident UUID, etc.).
 
 Major-incident chat commands:
 
@@ -111,6 +114,7 @@ Current cloud connectors:
 
 - AWS CloudWatch plugin: read-only `filter_log_events` collection.
 - Datadog plugin: read-only Events API collection.
+- PagerDuty plugin: incident/alert ingestion for service-scoped production context.
 - Slack notifier: outgoing webhook alerts with dedupe state.
 
 ## Major Incident Mode
@@ -253,7 +257,7 @@ Enable cloud plugins (production mode):
 ```bash
 # edit config/plugins.yaml
 # mode: cloud
-# collectors: [aws_cloudwatch, datadog]
+# collectors: [aws_cloudwatch, datadog, pagerduty]
 # notifiers: [slack]
 ```
 

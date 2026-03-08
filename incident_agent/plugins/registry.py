@@ -11,6 +11,7 @@ from incident_agent.loader import IncidentDataError
 from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
 from incident_agent.plugins.base import EvidencePlugin, NotifierPlugin
 from incident_agent.plugins.datadog import DatadogPlugin
+from incident_agent.plugins.pagerduty import PagerDutyPlugin
 from incident_agent.plugins.slack_notifier import SlackNotifierPlugin
 
 try:
@@ -64,6 +65,7 @@ def build_collectors(config: PluginConfig) -> list[EvidencePlugin]:
     plugin_map: dict[str, EvidencePlugin] = {
         "aws_cloudwatch": AWSCloudWatchPlugin(),
         "datadog": DatadogPlugin(),
+        "pagerduty": PagerDutyPlugin(),
     }
     return [plugin_map[name] for name in config.collectors if name in plugin_map]
 

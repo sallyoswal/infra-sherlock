@@ -5,6 +5,7 @@ from pathlib import Path
 from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
 from incident_agent.plugins.base import IncidentContext
 from incident_agent.plugins.datadog import DatadogPlugin
+from incident_agent.plugins.pagerduty import PagerDutyPlugin
 
 
 def _context() -> IncidentContext:
@@ -36,6 +37,19 @@ def test_datadog_plugin_dry_run_works_without_credentials(monkeypatch) -> None:
     monkeypatch.delenv("DATADOG_APP_KEY", raising=False)
 
     plugin = DatadogPlugin()
+    ok, _ = plugin.healthcheck()
+    result = plugin.collect(_context())
+
+    assert ok is True
+    assert result.key_evidence
+    assert "dry-run" in result.key_evidence[0].lower()
+
+
+def test_pagerduty_plugin_dry_run_works_without_token(monkeypatch) -> None:
+    monkeypatch.setenv("PLUGIN_DRY_RUN", "true")
+    monkeypatch.delenv("PAGERDUTY_API_TOKEN", raising=False)
+
+    plugin = PagerDutyPlugin()
     ok, _ = plugin.healthcheck()
     result = plugin.collect(_context())
 
