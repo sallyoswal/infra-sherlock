@@ -154,6 +154,27 @@ Confidence is reported using buckets (`high`, `medium`, `low`) with supporting/c
 
 ## Architecture
 
+Real-life / production flow:
+
+```mermaid
+flowchart TD
+    A[Trigger: Alert/Webhook/Scheduler] --> B[Agent Orchestrator]
+    B --> C[Plugin Registry]
+    C --> D[AWS Collectors: CloudWatch / CloudTrail]
+    C --> E[Datadog Collectors: Metrics / Logs / Events]
+    C --> F[Change Collectors: PRs / Terraform Plans]
+    D --> G[Normalized Signal Model]
+    E --> G
+    F --> G
+    G --> H[Deterministic Correlator + Reasoner]
+    H --> I[Optional LLM Synthesis]
+    I --> J[IncidentReport]
+    J --> K[Slack Notifier]
+    K --> L[Incident Channel: likely cause + evidence + next actions]
+```
+
+Local / test flow:
+
 ```mermaid
 flowchart TD
     A[CLI: run_agent.py / chat_agent.py / watch_incidents.py] --> B[Agent Orchestrator]
@@ -166,12 +187,11 @@ flowchart TD
     E --> G
     F --> G
     G --> H[IncidentReport]
-    H --> I[Timeline + Evidence + Remediation]
-    B --> J[Optional LLM Reasoner / Chat]
-    J --> H
-    B --> K[Optional Plugin Registry]
-    K --> L[AWS/Datadog Collectors]
-    K --> M[Slack Notifier]
+    B --> I[Optional LLM Reasoner / Chat]
+    I --> H
+    B --> J[Optional Plugin Registry]
+    J --> K[AWS/Datadog Collectors]
+    J --> L[Slack Notifier]
 ```
 
 ## Repository Layout
