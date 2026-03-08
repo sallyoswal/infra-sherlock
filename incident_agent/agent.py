@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import asdict
 import hashlib
 import json
 
@@ -12,6 +13,7 @@ from incident_agent.models import IncidentMetadata, IncidentReport, Notification
 from incident_agent.notifications.state_store import NotificationStateStore
 from incident_agent.plugins.base import IncidentContext, PluginEvidence
 from incident_agent.plugins.registry import (
+    PluginConfig,
     build_collectors,
     build_notifiers,
     load_plugin_config,
@@ -23,11 +25,12 @@ from incident_agent.tools.infra_tool import analyze_infra_changes
 from incident_agent.tools.logs_tool import analyze_logs
 from incident_agent.tools.metrics_tool import analyze_metrics
 
+MAX_NOTIFICATION_EVIDENCE = 3
+
 
 def investigate_incident(
     incident_name: str,
     datasets_root: Path | None = None,
-    prefer_llm: bool = True,
     plugin_config_path: Path | None = None,
     routing_config_path: Path | None = None,
     notify: bool = False,
@@ -50,7 +53,6 @@ def investigate_incident(
     deploys = analyze_deploys(target_dir / "deploy_history.json")
     infra = analyze_infra_changes(target_dir / "infra_changes.json")
 
-    del prefer_llm  # preserved for backward compatibility but intentionally ignored.
     if not has_llm_credentials():
         raise LLMReasonerError("AI-only mode requires LLM credentials for investigation.")
 
@@ -75,7 +77,7 @@ def investigate_incident(
     if notify:
         _notify_if_needed(
             report=report,
-            plugin_config_path=plugin_config_path,
+            plugin_cfg=plugin_cfg,
             routing_config_path=routing_config_path,
             state_path=state_path,
         )
@@ -116,25 +118,24 @@ def _build_notification_payload(report: IncidentReport, routing: dict[str, objec
         confidence=report.confidence,
         owner_team=route["team"],
         slack_channel=route["slack_channel"],
-        key_evidence=report.key_evidence[:3],
+        key_evidence=report.key_evidence[:MAX_NOTIFICATION_EVIDENCE],
         next_action=report.suggested_remediation[0] if report.suggested_remediation else "Run standard incident triage.",
     )
 
 
 def _fingerprint_payload(payload: NotificationPayload) -> str:
     """Create stable fingerprint used for dedupe."""
-    canonical = json.dumps(payload.__dict__, sort_keys=True)
+    canonical = json.dumps(asdict(payload), sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _notify_if_needed(
     report: IncidentReport,
-    plugin_config_path: Path | None = None,
+    plugin_cfg: PluginConfig,
     routing_config_path: Path | None = None,
     state_path: Path | None = None,
 ) -> None:
     """Send notifications using enabled notifier plugins with dedupe."""
-    plugin_cfg = load_plugin_config(plugin_config_path)
     notifiers = build_notifiers(plugin_cfg)
     if not notifiers:
         return

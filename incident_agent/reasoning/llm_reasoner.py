@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from incident_agent.llm_provider import (
@@ -23,6 +24,40 @@ from incident_agent.models import (
 
 class LLMReasonerError(Exception):
     """Raised when LLM report generation fails or produces invalid output."""
+
+
+def _call_with_retry(
+    client: Any,
+    model: str,
+    messages: list[dict[str, str]],
+    max_retries: int = 3,
+) -> Any:
+    """Call chat completions with retry and json_object compatibility fallback."""
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model=model,
+                temperature=0,
+                response_format={"type": "json_object"},
+                messages=messages,
+            )
+        except Exception as first_exc:
+            # Some providers/models do not support response_format=json_object.
+            try:
+                return client.chat.completions.create(
+                    model=model,
+                    temperature=0,
+                    messages=messages,
+                )
+            except Exception as second_exc:
+                if attempt == max_retries - 1:
+                    raise LLMReasonerError(
+                        f"LLM API request failed after {max_retries} attempts: {second_exc}"
+                    ) from second_exc
+                # Backoff on transient failures.
+                time.sleep(2**attempt)
+                # keep reference for debugging context
+                _ = first_exc
 
 
 def _evidence_payload(
@@ -192,18 +227,14 @@ def build_report_with_llm(
         f"{json.dumps(evidence, sort_keys=True)}"
     )
 
-    try:
-        response = client.chat.completions.create(
-            model=selected_model,
-            temperature=0,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-    except Exception as exc:
-        raise LLMReasonerError(f"LLM API request failed: {exc}") from exc
+    response = _call_with_retry(
+        client=client,
+        model=selected_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
 
     content = response.choices[0].message.content if response.choices else None
     if not content:

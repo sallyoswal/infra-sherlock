@@ -9,7 +9,7 @@ from incident_agent.chat import create_chat_session
 
 
 def test_slash_summary_contains_core_fields() -> None:
-    report = investigate_incident("payments_db_timeout", prefer_llm=False)
+    report = investigate_incident("payments_db_timeout")
     output = handle_slash_command("/summary", report)
 
     assert "summarize this incident" in output.lower()
@@ -17,7 +17,7 @@ def test_slash_summary_contains_core_fields() -> None:
 
 
 def test_slash_timeline_formats_entries() -> None:
-    report = investigate_incident("payments_db_timeout", prefer_llm=False)
+    report = investigate_incident("payments_db_timeout")
     output = handle_slash_command("/timeline", report)
 
     assert "timeline" in output.lower()
@@ -25,14 +25,14 @@ def test_slash_timeline_formats_entries() -> None:
 
 
 def test_slash_help_returns_command_list() -> None:
-    report = investigate_incident("payments_db_timeout", prefer_llm=False)
+    report = investigate_incident("payments_db_timeout")
     output = handle_slash_command("/help", report)
     assert "/summary" in output
     assert "/root" in output
 
 
 def test_slash_export_writes_markdown(tmp_path: Path) -> None:
-    report = investigate_incident("payments_db_timeout", prefer_llm=False)
+    report = investigate_incident("payments_db_timeout")
     target = tmp_path / "chat-export.md"
 
     output = handle_slash_command(f"/export {target}", report)

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from incident_agent.loader import IncidentDataError
 from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
 from incident_agent.plugins.base import EvidencePlugin, NotifierPlugin
 from incident_agent.plugins.datadog import DatadogPlugin

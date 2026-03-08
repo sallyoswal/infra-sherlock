@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from incident_agent.loader import IncidentDataError
+
 try:
     import yaml
 except Exception:  # pragma: no cover - import tested via behavior

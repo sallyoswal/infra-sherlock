@@ -35,6 +35,33 @@ def _score_confidence(
     return min(score, 0.99)
 
 
+def _infer_root_cause(
+    logs: LogAnalysis,
+    metrics: MetricsAnalysis,
+    deploys: DeployAnalysis,
+    infra: InfraAnalysis,
+) -> str:
+    """Infer likely root cause from available signals."""
+    if infra.high_risk_changes and logs.db_timeout_events >= 3 and infra.latest_change:
+        change = infra.latest_change
+        return (
+            f"High-risk {change.change_type} to {change.component} at {change.timestamp} "
+            f"likely caused {logs.db_timeout_events} DB timeout events and rising latency."
+        )
+    if deploys.latest_deploy and metrics.error_rate_rising:
+        deploy = deploys.latest_deploy
+        return (
+            f"Deploy {deploy.version} to {deploy.service} at {deploy.timestamp} "
+            "correlated with rising error rate."
+        )
+    if metrics.latency_rising and metrics.error_rate_rising:
+        return (
+            "Rising error rate and p95 latency with no clear infra or deploy trigger. "
+            "Investigate DB and upstream dependencies."
+        )
+    return "Root cause unclear. Insufficient signal correlation. Manual investigation required."
+
+
 def build_report(
     metadata: IncidentMetadata,
     logs: LogAnalysis,
@@ -45,10 +72,7 @@ def build_report(
     """Produce a structured root-cause report from tool outputs."""
     confidence = _score_confidence(logs=logs, metrics=metrics, deploys=deploys, infra=infra)
 
-    likely_root_cause = (
-        "High-risk network path change between payments service and database likely introduced "
-        "intermittent DB connectivity delays, triggering request timeouts and cascading latency."
-    )
+    likely_root_cause = _infer_root_cause(logs=logs, metrics=metrics, deploys=deploys, infra=infra)
 
     evidence = [
         f"Observed {logs.db_timeout_events} database timeout log events.",

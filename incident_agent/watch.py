@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,15 @@ from incident_agent.agent import investigate_incident
 from incident_agent.loader import IncidentDataError
 from incident_agent.models import IncidentReport
 from incident_agent.reasoning.llm_reasoner import LLMReasonerError
+
+_shutdown = False
+
+
+def _handle_signal(signum: int, _frame: object) -> None:
+    """Mark loop for shutdown on SIGTERM/SIGINT."""
+    del signum
+    global _shutdown
+    _shutdown = True
 
 
 @dataclass
@@ -33,7 +43,6 @@ def run_watch_iteration(
         report = investigate_incident(
             incident_name=incident_name,
             datasets_root=datasets_root,
-            prefer_llm=True,
             plugin_config_path=plugin_config_path,
             routing_config_path=routing_config_path,
             notify=True,
@@ -54,9 +63,14 @@ def run_watch_loop(
     state_path: Path | None = None,
 ) -> list[WatchResult]:
     """Run watch loop for one or more incidents."""
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
     results: list[WatchResult] = []
-    while True:
+    while not _shutdown:
         for incident_name in incidents:
+            if _shutdown:
+                break
             result = run_watch_iteration(
                 incident_name=incident_name,
                 datasets_root=datasets_root,
@@ -65,6 +79,6 @@ def run_watch_loop(
                 state_path=state_path,
             )
             results.append(result)
-        if once:
+        if once or _shutdown:
             return results
         time.sleep(interval_seconds)

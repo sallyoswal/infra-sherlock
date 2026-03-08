@@ -15,6 +15,8 @@ from incident_agent.llm_provider import (
 )
 from incident_agent.models import IncidentReport
 
+MAX_HISTORY_TURNS = 10
+
 
 class IncidentChatError(Exception):
     """Raised when chat session setup or querying fails."""
@@ -71,13 +73,13 @@ def ask_incident_question(
             "content": (
                 "You are an SRE incident assistant. Answer only using the provided incident report. "
                 "If data is missing, explicitly say what is unknown and what to verify next. "
-                "Prefer concise, operator-friendly responses."
+                "Prefer concise, operator-friendly responses. "
+                f"Incident report context (JSON): {report_json}"
             ),
         },
         {
             "role": "user",
             "content": (
-                f"Incident report context (JSON): {report_json}\\n"
                 f"Response style: {'2-4 lines max unless asked for details' if concise else 'detailed explanation allowed'}\\n"
                 f"Focus mode: {focus_mode or 'general'}"
             ),
@@ -105,4 +107,6 @@ def ask_incident_question(
             {"role": "assistant", "content": cleaned},
         ]
     )
+    if len(session.history) > MAX_HISTORY_TURNS * 2:
+        session.history = session.history[-(MAX_HISTORY_TURNS * 2):]
     return cleaned

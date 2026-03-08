@@ -44,14 +44,12 @@ def get_investigate_tool_spec() -> dict[str, Any]:
 def investigate_incident_tool(
     incident_name: str,
     datasets_root: Path | None = None,
-    prefer_llm: bool = True,
 ) -> dict[str, Any]:
     """MCP tool entrypoint that returns a structured incident report payload.
 
     Args:
         incident_name: Local incident scenario name.
         datasets_root: Optional override for datasets root directory.
-        prefer_llm: Whether to attempt LLM synthesis when API key is present.
 
     Returns:
         JSON-safe dictionary matching `IncidentReport` fields.
@@ -63,6 +61,5 @@ def investigate_incident_tool(
     report = investigate_incident(
         incident_name=cleaned_name,
         datasets_root=datasets_root,
-        prefer_llm=prefer_llm,
     )
     return serialize_incident_report(report)

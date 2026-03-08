@@ -80,7 +80,6 @@ def build_local_payload(report: IncidentReport, intent: ResponseIntent, detailed
     """Build concise or detailed local responses by conversational mode."""
     if intent == "summary":
         lines = [
-            f"{report.service_name} degraded due to DB connectivity issues after a network security change.",
             f"Most likely cause: {report.likely_root_cause}",
             f"Confidence: {report.confidence:.2f}",
         ]
