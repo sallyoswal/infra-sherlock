@@ -23,7 +23,14 @@ def load_json(path: Path) -> Any:
 
 def incident_dir(base_dir: Path, incident_name: str) -> Path:
     """Resolve and validate an incident directory."""
-    target = base_dir / incident_name
+    base = base_dir.resolve()
+    target = (base / incident_name).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError as exc:
+        raise IncidentDataError(
+            f"Invalid incident name (path traversal attempt): {incident_name!r}"
+        ) from exc
     if not target.exists() or not target.is_dir():
         raise IncidentDataError(f"Incident not found: {incident_name} in {base_dir}")
     return target
