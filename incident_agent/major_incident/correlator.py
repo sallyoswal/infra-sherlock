@@ -520,10 +520,20 @@ def triage_major_incident(
     dataset.incident_group.hypotheses = hypotheses
 
     fastest_step = _fastest_validation_step(top_change, layer)
+    downstream_services = [
+        s.service for s in summaries if s.service != earliest_service and s.likely_role == "downstream"
+    ]
+    if downstream_services:
+        action_two = (
+            f"Prioritize {earliest_service} dependency path checks, then verify "
+            f"{', '.join(downstream_services[:2])} recovery."
+        )
+    else:
+        action_two = f"Prioritize {earliest_service} dependency path checks."
 
     recommended_actions = [
         fastest_step,
-        "Prioritize payments-api dependency path checks, then verify checkout-api and billing-worker recovery.",
+        action_two,
         "Coordinate service owners to monitor transaction success rate and p95 latency during mitigation rollout.",
     ]
 
