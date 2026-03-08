@@ -6,6 +6,8 @@ import json
 import time
 from typing import Any
 
+import openai
+
 from incident_agent.llm_provider import (
     create_openai_compatible_client,
     get_model_for_provider,
@@ -26,6 +28,14 @@ class LLMReasonerError(Exception):
     """Raised when LLM report generation fails or produces invalid output."""
 
 
+_NON_RETRIABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
+    openai.AuthenticationError,
+    openai.PermissionDeniedError,
+    openai.NotFoundError,
+    openai.BadRequestError,
+)
+
+
 def _call_with_retry(
     client: Any,
     model: str,
@@ -33,6 +43,7 @@ def _call_with_retry(
     max_retries: int = 3,
 ) -> Any:
     """Call chat completions with retry and json_object compatibility fallback."""
+    last_exc: Exception | None = None
     for attempt in range(max_retries):
         try:
             return client.chat.completions.create(
@@ -41,7 +52,10 @@ def _call_with_retry(
                 response_format={"type": "json_object"},
                 messages=messages,
             )
+        except _NON_RETRIABLE_EXCEPTIONS:
+            raise
         except Exception as first_exc:
+            last_exc = first_exc
             # Some providers/models do not support response_format=json_object.
             try:
                 return client.chat.completions.create(
@@ -49,15 +63,17 @@ def _call_with_retry(
                     temperature=0,
                     messages=messages,
                 )
+            except _NON_RETRIABLE_EXCEPTIONS:
+                raise
             except Exception as second_exc:
+                last_exc = second_exc
                 if attempt == max_retries - 1:
-                    raise LLMReasonerError(
-                        f"LLM API request failed after {max_retries} attempts: {second_exc}"
-                    ) from second_exc
+                    break
                 # Backoff on transient failures.
                 time.sleep(2**attempt)
-                # keep reference for debugging context
-                _ = first_exc
+    raise LLMReasonerError(
+        f"LLM API request failed after {max_retries} attempts: {last_exc}"
+    ) from last_exc
 
 
 def _evidence_payload(
