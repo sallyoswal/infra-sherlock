@@ -1,0 +1,9 @@
+[
+  {
+    "timestamp": "2026-03-08T12:30:00Z",
+    "component": "autoscaling-policy/checkout-api",
+    "change_type": "scale_threshold_tuning",
+    "risk_level": "low",
+    "details": "Raised scale-out threshold slightly for non-peak hours"
+  }
+]

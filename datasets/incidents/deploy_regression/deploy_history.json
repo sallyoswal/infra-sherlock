@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-03-07T09:15:00Z",
+    "version": "2026.03.07.4",
+    "service": "checkout-api",
+    "notes": "Minor copy update"
+  },
+  {
+    "timestamp": "2026-03-08T14:00:00Z",
+    "version": "2026.03.08.2",
+    "service": "checkout-api",
+    "notes": "Refactor discount + promo evaluation"
+  }
+]
