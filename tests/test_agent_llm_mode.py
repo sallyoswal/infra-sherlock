@@ -125,3 +125,55 @@ def test_agent_cloud_mode_requires_actionable_plugin_evidence(monkeypatch) -> No
             investigation_mode="cloud",
             service_name="payments-api",
         )
+
+
+def test_agent_respects_max_api_calls_per_run_budget(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        agent,
+        "load_plugin_config",
+        lambda _: PluginConfig(
+            mode="cloud",
+            collectors=["aws_cloudwatch", "datadog"],
+            notifiers=[],
+            max_api_calls_per_run=1,
+        ),
+    )
+    calls = {"first": 0, "second": 0}
+
+    class _FirstCollector:
+        def healthcheck(self) -> tuple[bool, str]:
+            return True, "ok"
+
+        def collect(self, context: IncidentContext) -> PluginEvidence:
+            del context
+            calls["first"] += 1
+            return PluginEvidence(
+                key_evidence=["CloudWatch: timeout spike observed"],
+                timeline_events=[],
+            )
+
+    class _SecondCollector:
+        def healthcheck(self) -> tuple[bool, str]:
+            return True, "ok"
+
+        def collect(self, context: IncidentContext) -> PluginEvidence:
+            del context
+            calls["second"] += 1
+            return PluginEvidence(
+                key_evidence=["Datadog: error spike observed"],
+                timeline_events=[],
+            )
+
+    monkeypatch.setattr(agent, "build_collectors", lambda _: [_FirstCollector(), _SecondCollector()])
+    monkeypatch.setattr(agent, "build_report_with_llm", lambda **_: _fake_llm_report())
+
+    report = agent.investigate_incident(
+        "prod-incident-3",
+        investigation_mode="cloud",
+        service_name="payments-api",
+    )
+    assert report is not None
+    assert calls["first"] == 1
+    assert calls["second"] == 0

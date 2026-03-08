@@ -70,7 +70,11 @@ def investigate_incident(
             service_name=service_name,
             incident_dir=Path("."),
         )
-        plugin_evidence = _collect_plugin_evidence(collectors, context)
+        plugin_evidence = _collect_plugin_evidence(
+            collectors,
+            context,
+            max_calls=plugin_cfg.max_api_calls_per_run,
+        )
         if not _has_actionable_cloud_evidence(plugin_evidence):
             raise LLMReasonerError(
                 "cloud mode collected no actionable evidence; verify plugin credentials, filters, and service_name"
@@ -120,7 +124,11 @@ def investigate_incident(
             service_name=metadata.service_name,
             incident_dir=target_dir,
         )
-        plugin_evidence = _collect_plugin_evidence(collectors, context)
+        plugin_evidence = _collect_plugin_evidence(
+            collectors,
+            context,
+            max_calls=plugin_cfg.max_api_calls_per_run,
+        )
         _merge_plugin_evidence(report, plugin_evidence)
 
     if notify:
@@ -192,14 +200,23 @@ def _has_actionable_cloud_evidence(evidence: PluginEvidence) -> bool:
     return False
 
 
-def _collect_plugin_evidence(collectors: list[object], context: IncidentContext) -> PluginEvidence:
+def _collect_plugin_evidence(
+    collectors: list[object],
+    context: IncidentContext,
+    max_calls: int,
+) -> PluginEvidence:
     """Collect and merge optional evidence from enabled plugins."""
     merged = PluginEvidence()
+    budget = max(max_calls, 0)
+    calls = 0
     for collector in collectors:
+        if calls >= budget:
+            break
         ok, _ = collector.healthcheck()
         if not ok:
             continue
         partial = collector.collect(context)
+        calls += 1
         merged.key_evidence.extend(partial.key_evidence)
         merged.timeline_events.extend(partial.timeline_events)
     return merged
