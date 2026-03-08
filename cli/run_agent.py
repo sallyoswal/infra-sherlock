@@ -15,6 +15,7 @@ from incident_agent.agent import investigate_incident
 from incident_agent.loader import IncidentDataError
 from incident_agent.models import IncidentReport
 from incident_agent.reasoning.llm_reasoner import LLMReasonerError
+from cli.response_formatter import report_to_markdown
 from cli.env_utils import load_local_env
 
 try:
@@ -80,32 +81,6 @@ def _render_report(report: IncidentReport) -> None:
     console.print(next_steps_table)
 
 
-def _report_to_markdown(report: IncidentReport) -> str:
-    """Convert a report into markdown text for sharing/export."""
-    lines: list[str] = [
-        f"# {report.incident_title}",
-        "",
-        f"- **Incident Name:** `{report.incident_name}`",
-        f"- **Service:** `{report.service_name}`",
-        f"- **Likely Root Cause:** {report.likely_root_cause}",
-        f"- **Confidence:** {report.confidence:.2f}",
-        "",
-        "## Key Evidence",
-    ]
-    lines.extend(f"- {item}" for item in report.key_evidence)
-    lines.append("")
-    lines.append("## Incident Timeline")
-    lines.extend(f"- `{event.timestamp}` [{event.source}] {event.event}" for event in report.timeline)
-    lines.append("")
-    lines.append("## Suggested Remediation")
-    lines.extend(f"- {item}" for item in report.suggested_remediation)
-    lines.append("")
-    lines.append("## Next Investigative Steps")
-    lines.extend(f"- {item}" for item in report.next_investigative_steps)
-    lines.append("")
-    return "\n".join(lines)
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser."""
     parser = argparse.ArgumentParser(prog="infra-sherlock")
@@ -157,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.output:
             try:
                 args.output.parent.mkdir(parents=True, exist_ok=True)
-                args.output.write_text(_report_to_markdown(report), encoding="utf-8")
+                args.output.write_text(report_to_markdown(report), encoding="utf-8")
                 if not args.quiet:
                     print(f"Markdown report written to: {args.output}")
             except OSError as exc:
