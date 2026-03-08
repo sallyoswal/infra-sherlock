@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
+from incident_agent.llm_provider import (
+    create_openai_compatible_client,
+    get_model_for_provider,
+    has_llm_credentials,
+)
 from incident_agent.models import (
     DeployAnalysis,
     IncidentMetadata,
@@ -149,20 +153,16 @@ def build_report_with_llm(
     client: Any | None = None,
 ) -> IncidentReport:
     """Call an LLM for final report synthesis and return strict IncidentReport."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise LLMReasonerError("OPENAI_API_KEY is not set")
+    if not has_llm_credentials():
+        raise LLMReasonerError("No LLM credentials found for the selected provider")
 
-    selected_model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    selected_model = model or get_model_for_provider()
 
     if client is None:
         try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise LLMReasonerError(
-                "openai package is not installed; install dependencies to enable LLM mode"
-            ) from exc
-        client = OpenAI(api_key=api_key)
+            client = create_openai_compatible_client()
+        except ValueError as exc:
+            raise LLMReasonerError(str(exc)) from exc
 
     evidence = _evidence_payload(
         metadata=metadata,
@@ -192,15 +192,18 @@ def build_report_with_llm(
         f"{json.dumps(evidence, sort_keys=True)}"
     )
 
-    response = client.chat.completions.create(
-        model=selected_model,
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
+    try:
+        response = client.chat.completions.create(
+            model=selected_model,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except Exception as exc:
+        raise LLMReasonerError(f"LLM API request failed: {exc}") from exc
 
     content = response.choices[0].message.content if response.choices else None
     if not content:

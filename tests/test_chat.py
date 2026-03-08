@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import pytest
+
+from incident_agent.chat import IncidentChatError, ask_incident_question, create_chat_session
+
+
+class _FakeMessage:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _FakeChoice:
+    def __init__(self, content: str) -> None:
+        self.message = _FakeMessage(content)
+
+
+class _FakeResponse:
+    def __init__(self, content: str) -> None:
+        self.choices = [_FakeChoice(content)]
+
+
+class _FakeCompletions:
+    def create(self, **kwargs):
+        return _FakeResponse("Most likely caused by infra networking changes.")
+
+
+class _FakeChat:
+    def __init__(self) -> None:
+        self.completions = _FakeCompletions()
+
+
+class _FakeClient:
+    def __init__(self) -> None:
+        self.chat = _FakeChat()
+
+
+def test_create_chat_session_uses_local_incident_context() -> None:
+    session = create_chat_session("payments_db_timeout")
+    assert session.report.incident_name == "payments_db_timeout"
+    assert session.history == []
+
+
+def test_ask_incident_question_returns_answer_and_updates_history(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    session = create_chat_session("payments_db_timeout")
+    answer = ask_incident_question(
+        session=session,
+        question="What is the likely root cause?",
+        client=_FakeClient(),
+    )
+
+    assert "infra networking" in answer.lower()
+    assert len(session.history) == 2
+    assert session.history[0]["role"] == "user"
+    assert session.history[1]["role"] == "assistant"
+
+
+def test_ask_incident_question_requires_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    session = create_chat_session("payments_db_timeout")
+
+    with pytest.raises(IncidentChatError):
+        ask_incident_question(session=session, question="Any summary?")

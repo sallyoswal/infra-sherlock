@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from incident_agent.loader import incident_dir, load_json
+from incident_agent.llm_provider import has_llm_credentials
 from incident_agent.models import IncidentMetadata, IncidentReport
 from incident_agent.reasoning.deterministic_reasoner import build_report as build_deterministic_report
 from incident_agent.reasoning.llm_reasoner import LLMReasonerError, build_report_with_llm
@@ -37,7 +37,7 @@ def investigate_incident(
     deploys = analyze_deploys(target_dir / "deploy_history.json")
     infra = analyze_infra_changes(target_dir / "infra_changes.json")
 
-    should_try_llm = prefer_llm and bool(os.getenv("OPENAI_API_KEY"))
+    should_try_llm = prefer_llm and has_llm_credentials()
     if should_try_llm:
         try:
             return build_report_with_llm(

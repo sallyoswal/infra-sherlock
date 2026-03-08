@@ -25,6 +25,7 @@ def _fake_llm_report() -> IncidentReport:
 
 
 def test_agent_uses_llm_when_api_key_present(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     def _fake_build_report_with_llm(**kwargs):
@@ -37,6 +38,7 @@ def test_agent_uses_llm_when_api_key_present(monkeypatch) -> None:
 
 
 def test_agent_falls_back_when_llm_fails(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     def _raise_llm_error(**kwargs):

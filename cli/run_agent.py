@@ -6,9 +6,15 @@ import argparse
 import sys
 from pathlib import Path
 
+# Support direct execution: `python cli/run_agent.py ...`
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from incident_agent.agent import investigate_incident
 from incident_agent.loader import IncidentDataError
 from incident_agent.models import IncidentReport
+from cli.env_utils import load_local_env
 
 try:
     from rich.console import Console
@@ -118,12 +124,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional path to export the report as markdown (e.g. report.md)",
     )
+    investigate_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress terminal report output (useful with --output).",
+    )
 
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     """CLI main entrypoint."""
+    load_local_env(PROJECT_ROOT)
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -136,12 +148,14 @@ def main(argv: list[str] | None = None) -> int:
         except IncidentDataError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
-        _render_report(report)
+        if not args.quiet:
+            _render_report(report)
         if args.output:
             try:
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(_report_to_markdown(report), encoding="utf-8")
-                print(f"Markdown report written to: {args.output}")
+                if not args.quiet:
+                    print(f"Markdown report written to: {args.output}")
             except OSError as exc:
                 print(f"Error writing markdown report: {exc}", file=sys.stderr)
                 return 3

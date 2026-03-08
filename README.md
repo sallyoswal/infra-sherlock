@@ -20,7 +20,7 @@ Core flow:
 1. `agent.py` orchestrates investigation.
 2. Tool modules parse and summarize each signal type.
 3. Timeline reconstruction merges timestamped events from logs, deploy history, and infra changes.
-4. If `OPENAI_API_KEY` is set, `llm_reasoner.py` synthesizes a strict JSON report.
+4. If LLM credentials are configured (`openai` or `openrouter`), `llm_reasoner.py` synthesizes a strict JSON report.
 5. If LLM mode is unavailable/fails, deterministic fallback reasoner applies explicit heuristics.
 6. CLI prints a polished report (with `rich` if installed).
 
@@ -91,11 +91,39 @@ python cli/run_agent.py investigate payments_db_timeout
 python cli/run_agent.py investigate payments_db_timeout --output reports/payments_db_timeout.md
 ```
 
+## Incident Chat
+
+Use an interactive chat session for follow-up questions about a specific incident:
+
+```bash
+python cli/chat_agent.py payments_db_timeout
+```
+
+Notes:
+- Requires LLM credentials in your local environment or `.env` (`openai` or `openrouter`).
+- Chat uses the locally generated incident report as context.
+- Type `exit` or `quit` to end the session.
+- Built-in local slash commands:
+  - `/summary`
+  - `/timeline`
+  - `/evidence`
+  - `/remediation`
+  - `/export <file.md>`
+
 ## Optional LLM Mode
 
-If `OPENAI_API_KEY` is set, the agent attempts LLM synthesis for the final report and enforces a strict response schema before constructing `IncidentReport`.
+If LLM credentials are set, the agent attempts LLM synthesis for the final report and enforces a strict response schema before constructing `IncidentReport`.
 
 If the key is missing, the `openai` package is unavailable, or the LLM response is invalid, the workflow automatically falls back to deterministic reasoning.
+
+You can keep secrets local by creating a `.env` file (already gitignored):
+
+```bash
+cp .env.example .env
+# then set one provider block in .env:
+# LLM_PROVIDER=openai with OPENAI_API_KEY
+# or LLM_PROVIDER=openrouter with OPENROUTER_API_KEY
+```
 
 ## Minimal MCP Wrapper
 

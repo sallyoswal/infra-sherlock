@@ -25,3 +25,21 @@ def test_cli_timeline_formatting_in_plain_output(monkeypatch, capsys) -> None:
     assert code == 0
     assert "Timeline:" in captured.out
     assert "[logs]" in captured.out or "[deploy_history]" in captured.out or "[infra_changes]" in captured.out
+
+
+def test_cli_quiet_with_output_writes_file_without_terminal_report(capsys, tmp_path) -> None:
+    output_file = tmp_path / "quiet-report.md"
+    code = main(
+        [
+            "investigate",
+            "payments_db_timeout",
+            "--output",
+            str(output_file),
+            "--quiet",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert output_file.exists()
+    assert "Incident:" not in captured.out
+    assert "Markdown report written to" not in captured.out
