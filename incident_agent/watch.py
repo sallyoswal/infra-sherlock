@@ -63,6 +63,8 @@ def run_watch_loop(
     state_path: Path | None = None,
 ) -> list[WatchResult]:
     """Run watch loop for one or more incidents."""
+    global _shutdown
+    _shutdown = False
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 

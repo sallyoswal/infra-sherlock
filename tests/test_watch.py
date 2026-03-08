@@ -45,3 +45,17 @@ def test_watch_loop_once_runs_all_incidents(monkeypatch) -> None:
 
     assert len(results) == 2
     assert all(result.report is not None for result in results)
+
+
+def test_watch_loop_resets_prior_shutdown_state(monkeypatch) -> None:
+    monkeypatch.setattr("incident_agent.watch.investigate_incident", lambda **kwargs: _fake_report())
+    monkeypatch.setattr("incident_agent.watch._shutdown", True)
+
+    results = run_watch_loop(
+        incidents=["payments_db_timeout"],
+        datasets_root=Path("."),
+        once=True,
+    )
+
+    assert len(results) == 1
+    assert results[0].report is not None
