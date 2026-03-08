@@ -1,4 +1,5 @@
 """CLI loop for automated incident watch and team notifications."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 

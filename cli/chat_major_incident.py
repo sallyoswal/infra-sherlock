@@ -1,4 +1,5 @@
 """Interactive deterministic chat for major incidents."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """Interactive chat CLI for discussing incidents with Infra Sherlock."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 

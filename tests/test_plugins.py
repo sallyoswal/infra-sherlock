@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from incident_agent import agent
-from incident_agent.models import IncidentReport, TimelineEvent
 from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
 from incident_agent.plugins.base import IncidentContext
 from incident_agent.plugins.datadog import DatadogPlugin

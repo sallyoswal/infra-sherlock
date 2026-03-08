@@ -1,4 +1,5 @@
 """CLI launcher for Infra Sherlock MCP server."""
+# ruff: noqa: E402
 
 from __future__ import annotations
 
