@@ -71,6 +71,10 @@ def investigate_incident(
             incident_dir=Path("."),
         )
         plugin_evidence = _collect_plugin_evidence(collectors, context)
+        if not _has_actionable_cloud_evidence(plugin_evidence):
+            raise LLMReasonerError(
+                "cloud mode collected no actionable evidence; verify plugin credentials, filters, and service_name"
+            )
         logs, metrics, deploys, infra = _analyses_from_plugin_evidence(plugin_evidence)
         metadata = IncidentMetadata(
             incident_name=incident_name,
@@ -174,6 +178,18 @@ def _analyses_from_plugin_evidence(
     deploys = DeployAnalysis(records=[], latest_deploy=None)
     infra = InfraAnalysis(changes=[], latest_change=None, high_risk_changes=[])
     return logs, metrics, deploys, infra
+
+
+def _has_actionable_cloud_evidence(evidence: PluginEvidence) -> bool:
+    """Return whether collected plugin evidence is sufficient for LLM synthesis."""
+    if evidence.timeline_events:
+        return True
+    for item in evidence.key_evidence:
+        lowered = item.lower()
+        if "dry-run" in lowered or "failed" in lowered:
+            continue
+        return True
+    return False
 
 
 def _collect_plugin_evidence(collectors: list[object], context: IncidentContext) -> PluginEvidence:

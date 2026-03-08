@@ -97,3 +97,31 @@ def test_agent_cloud_mode_requires_service_name(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     with pytest.raises(agent.LLMReasonerError):
         agent.investigate_incident("prod-incident-1", investigation_mode="cloud")
+
+
+def test_agent_cloud_mode_requires_actionable_plugin_evidence(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        agent,
+        "load_plugin_config",
+        lambda _: PluginConfig(mode="cloud", collectors=["aws_cloudwatch"], notifiers=[]),
+    )
+
+    class _EmptyCollector:
+        def healthcheck(self) -> tuple[bool, str]:
+            return True, "ok"
+
+        def collect(self, context: IncidentContext) -> PluginEvidence:
+            del context
+            return PluginEvidence(key_evidence=[], timeline_events=[])
+
+    monkeypatch.setattr(agent, "build_collectors", lambda _: [_EmptyCollector()])
+    monkeypatch.setattr(agent, "build_report_with_llm", lambda **_: _fake_llm_report())
+
+    with pytest.raises(agent.LLMReasonerError, match="no actionable evidence"):
+        agent.investigate_incident(
+            "prod-incident-2",
+            investigation_mode="cloud",
+            service_name="payments-api",
+        )
