@@ -2,8 +2,6 @@
 
 Infra Sherlock is an AI-powered incident investigation tool that simulates how an SRE analyzes production outages by correlating logs, metrics, deploy history, and infrastructure changes.
 
-Local-first by default, demo-ready in a terminal, and designed for portfolio/interview walkthroughs.
-
 ![Infra Sherlock CLI Chat Screenshot](assets/cli-chat-screenshot.svg)
 
 ## Why It Matters
