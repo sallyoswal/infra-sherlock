@@ -6,6 +6,7 @@ import signal
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from incident_agent.agent import investigate_incident
 from incident_agent.loader import IncidentDataError
@@ -37,6 +38,9 @@ def run_watch_iteration(
     plugin_config_path: Path | None = None,
     routing_config_path: Path | None = None,
     state_path: Path | None = None,
+    investigation_mode: Literal["local", "cloud"] = "local",
+    service_name: str | None = None,
+    incident_title: str | None = None,
 ) -> WatchResult:
     """Run one incident watch iteration and send notifications if configured."""
     try:
@@ -47,6 +51,9 @@ def run_watch_iteration(
             routing_config_path=routing_config_path,
             notify=True,
             state_path=state_path,
+            investigation_mode=investigation_mode,
+            service_name=service_name,
+            incident_title=incident_title,
         )
         return WatchResult(incident_name=incident_name, report=report)
     except (IncidentDataError, LLMReasonerError) as exc:
@@ -61,6 +68,9 @@ def run_watch_loop(
     plugin_config_path: Path | None = None,
     routing_config_path: Path | None = None,
     state_path: Path | None = None,
+    investigation_mode: Literal["local", "cloud"] = "local",
+    service_name: str | None = None,
+    incident_title: str | None = None,
 ) -> list[WatchResult]:
     """Run watch loop for one or more incidents."""
     global _shutdown
@@ -79,6 +89,9 @@ def run_watch_loop(
                 plugin_config_path=plugin_config_path,
                 routing_config_path=routing_config_path,
                 state_path=state_path,
+                investigation_mode=investigation_mode,
+                service_name=service_name,
+                incident_title=incident_title,
             )
             results.append(result)
         if once or _shutdown:

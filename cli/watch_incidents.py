@@ -28,6 +28,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="infra-sherlock-watch")
     parser.add_argument("incidents", nargs="+", help="Incident names to watch")
     parser.add_argument(
+        "--mode",
+        choices=["local", "cloud"],
+        required=True,
+        help="Watch mode: local reads fixture datasets; cloud uses configured collectors only.",
+    )
+    parser.add_argument(
+        "--service-name",
+        type=str,
+        default=None,
+        help="Required in cloud mode: service identifier used by cloud collectors.",
+    )
+    parser.add_argument(
+        "--incident-title",
+        type=str,
+        default=None,
+        help="Optional in cloud mode: incident title override for generated reports.",
+    )
+    parser.add_argument(
         "--datasets-root",
         type=Path,
         default=PROJECT_ROOT / "datasets" / "incidents",
@@ -85,6 +103,9 @@ def main(argv: list[str] | None = None) -> int:
         import os
 
         os.environ["PLUGIN_DRY_RUN"] = "1"
+    if args.mode == "cloud" and not args.service_name:
+        print("Error: --service-name is required when --mode cloud", file=sys.stderr)
+        return 2
     run_once = args.detect_and_notify or args.once
     results = run_watch_loop(
         incidents=args.incidents,
@@ -94,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         plugin_config_path=args.plugin_config,
         routing_config_path=args.routing_config,
         state_path=args.state_path,
+        investigation_mode=args.mode,
+        service_name=args.service_name,
+        incident_title=args.incident_title,
     )
 
     if HAS_RICH:
