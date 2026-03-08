@@ -4,6 +4,9 @@ from pathlib import Path
 
 from incident_agent import agent
 from incident_agent.models import IncidentReport, TimelineEvent
+from incident_agent.plugins.aws_cloudwatch import AWSCloudWatchPlugin
+from incident_agent.plugins.base import IncidentContext
+from incident_agent.plugins.datadog import DatadogPlugin
 from incident_agent.plugins.registry import PluginConfig, build_collectors, build_notifiers
 
 
@@ -47,7 +50,7 @@ def test_cloud_collectors_with_missing_credentials_are_graceful(monkeypatch) -> 
         lambda _: PluginConfig(mode="cloud", collectors=["aws_cloudwatch", "datadog"], notifiers=[]),
     )
 
-    report = agent.investigate_incident("payments_db_timeout", prefer_llm=False)
+    report = agent.investigate_incident("payments_db_timeout")
 
     assert all("collector configured" not in event.event.lower() for event in report.timeline)
 
@@ -69,7 +72,62 @@ def test_notification_dedupe_sends_once(monkeypatch, tmp_path: Path) -> None:
 
     state_path = tmp_path / "alerts.json"
 
-    agent.investigate_incident("payments_db_timeout", prefer_llm=False, notify=True, state_path=state_path)
-    agent.investigate_incident("payments_db_timeout", prefer_llm=False, notify=True, state_path=state_path)
+    agent.investigate_incident("payments_db_timeout", notify=True, state_path=state_path)
+    agent.investigate_incident("payments_db_timeout", notify=True, state_path=state_path)
 
     assert fake_notifier.calls == 1
+
+
+def test_aws_plugin_collects_realistic_events(monkeypatch) -> None:
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "x")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "y")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    class _FakeLogsClient:
+        def filter_log_events(self, **kwargs):
+            assert kwargs["logGroupName"] == "/aws/lambda/payments-api"
+            return {
+                "events": [
+                    {"timestamp": 1709892000000, "message": "ERROR db timeout while creating payment"},
+                    {"timestamp": 1709892060000, "message": "ERROR upstream timeout"},
+                ]
+            }
+
+    plugin = AWSCloudWatchPlugin(logs_client_factory=lambda region: _FakeLogsClient())
+    context = IncidentContext(
+        incident_name="payments_db_timeout",
+        service_name="payments-api",
+        incident_dir=Path("datasets/incidents/payments_db_timeout"),
+    )
+    result = plugin.collect(context)
+
+    assert result.key_evidence
+    assert "returned 2 matching log events" in result.key_evidence[0]
+    assert len(result.timeline_events) == 2
+    assert result.timeline_events[0].source == "plugin:aws_cloudwatch"
+
+
+def test_datadog_plugin_collects_matching_events(monkeypatch) -> None:
+    monkeypatch.setenv("DATADOG_API_KEY", "x")
+    monkeypatch.setenv("DATADOG_APP_KEY", "y")
+    monkeypatch.setenv("DATADOG_SITE", "datadoghq.com")
+
+    payload = (
+        b'{\"events\": ['
+        b'{\"title\": \"payments-api high latency\", \"text\": \"payments-api timeout spike\", \"date_happened\": 1709892000},'
+        b'{\"title\": \"other-service\", \"text\": \"healthy\", \"date_happened\": 1709892060}'
+        b"]}"
+    )
+
+    plugin = DatadogPlugin(http_get=lambda url, headers: payload)
+    context = IncidentContext(
+        incident_name="payments_db_timeout",
+        service_name="payments-api",
+        incident_dir=Path("datasets/incidents/payments_db_timeout"),
+    )
+    result = plugin.collect(context)
+
+    assert result.key_evidence
+    assert "returned 1 matching events" in result.key_evidence[0]
+    assert len(result.timeline_events) == 1
+    assert result.timeline_events[0].source == "plugin:datadog"
