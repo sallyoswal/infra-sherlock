@@ -13,6 +13,8 @@ def test_get_investigate_tool_spec_shape() -> None:
     assert spec["name"] == "investigate_incident"
     assert "input_schema" in spec
     assert "incident_name" in spec["input_schema"]["properties"]
+    assert "mode" in spec["input_schema"]["properties"]
+    assert "service_name" in spec["input_schema"]["properties"]
 
 
 def test_investigate_incident_tool_returns_structured_report() -> None:
@@ -27,3 +29,13 @@ def test_investigate_incident_tool_returns_structured_report() -> None:
 def test_investigate_incident_tool_rejects_empty_incident_name() -> None:
     with pytest.raises(ValueError):
         investigate_incident_tool("   ")
+
+
+def test_investigate_incident_tool_rejects_invalid_mode() -> None:
+    with pytest.raises(ValueError):
+        investigate_incident_tool("incident-1", mode="invalid")
+
+
+def test_investigate_incident_tool_requires_service_in_cloud_mode() -> None:
+    with pytest.raises(ValueError):
+        investigate_incident_tool("incident-1", mode="cloud")

@@ -197,6 +197,11 @@ Provided MCP tools:
 - `get_incident_timeline`
 - `get_incident_remediation`
 
+MCP tool inputs support both:
+
+- local mode: `incident_name`
+- cloud mode: `incident_name`, `mode="cloud"`, `service_name`, optional `incident_title`
+
 Implementation:
 
 - Server: `incident_agent/mcp/server.py`
