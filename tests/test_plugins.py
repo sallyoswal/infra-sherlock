@@ -133,6 +133,26 @@ def test_datadog_plugin_collects_matching_events(monkeypatch) -> None:
     assert result.timeline_events[0].source == "plugin:datadog"
 
 
+def test_datadog_plugin_includes_service_query_param(monkeypatch) -> None:
+    monkeypatch.setenv("DATADOG_API_KEY", "x")
+    monkeypatch.setenv("DATADOG_APP_KEY", "y")
+    captured = {"url": ""}
+
+    def _fake_get(url: str, headers: dict[str, str]) -> bytes:
+        del headers
+        captured["url"] = url
+        return b'{"events": []}'
+
+    plugin = DatadogPlugin(http_get=_fake_get)
+    context = IncidentContext(
+        incident_name="prod-incident-1",
+        service_name="payments-api",
+        incident_dir=Path("."),
+    )
+    plugin.collect(context)
+    assert "query=service%3Apayments-api" in captured["url"]
+
+
 def test_pagerduty_plugin_collects_matching_incidents(monkeypatch) -> None:
     monkeypatch.setenv("PAGERDUTY_API_TOKEN", "x")
 
@@ -155,3 +175,25 @@ def test_pagerduty_plugin_collects_matching_incidents(monkeypatch) -> None:
     assert "returned 1 matching incidents" in result.key_evidence[0]
     assert len(result.timeline_events) == 1
     assert result.timeline_events[0].source == "plugin:pagerduty"
+
+
+def test_pagerduty_plugin_uses_service_id_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("PAGERDUTY_API_TOKEN", "x")
+    monkeypatch.setenv("PAGERDUTY_SERVICE_ID", "P123")
+    captured = {"url": ""}
+
+    payload = b'{"incidents": []}'
+
+    def _fake_get(url: str, headers: dict[str, str]) -> bytes:
+        del headers
+        captured["url"] = url
+        return payload
+
+    plugin = PagerDutyPlugin(http_get=_fake_get)
+    context = IncidentContext(
+        incident_name="prod-incident-1",
+        service_name="payments-api",
+        incident_dir=Path("."),
+    )
+    plugin.collect(context)
+    assert "service_ids%5B%5D=P123" in captured["url"]

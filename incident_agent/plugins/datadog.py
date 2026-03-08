@@ -57,7 +57,8 @@ class DatadogPlugin:
             )
         now = int(datetime.now(timezone.utc).timestamp())
         start = now - 15 * 60
-        query = parse.urlencode({"start": start, "end": now})
+        service_query = os.getenv("DATADOG_SERVICE_QUERY", f"service:{context.service_name}")
+        query = parse.urlencode({"start": start, "end": now, "query": service_query})
         url = f"https://api.{site}/api/v1/events?{query}"
         headers = {"DD-API-KEY": api_key, "DD-APPLICATION-KEY": app_key}
 
@@ -76,8 +77,10 @@ class DatadogPlugin:
         for event in events:
             if not isinstance(event, dict):
                 continue
-            text = f"{event.get('title', '')} {event.get('text', '')}".lower()
-            if needle in text:
+            tags = event.get("tags", [])
+            normalized_tags = " ".join(str(tag).lower() for tag in tags) if isinstance(tags, list) else ""
+            text = f"{event.get('title', '')} {event.get('text', '')} {normalized_tags}".lower()
+            if needle in text or f"service:{needle}" in normalized_tags:
                 matching.append(event)
 
         timeline_events: list[TimelineEvent] = []

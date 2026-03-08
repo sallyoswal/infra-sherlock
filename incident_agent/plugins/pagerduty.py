@@ -57,9 +57,21 @@ class PagerDutyPlugin:
             {
                 "statuses[]": ["triggered", "acknowledged"],
                 "limit": 25,
+                "query": context.service_name,
             },
             doseq=True,
         )
+        service_id = os.getenv("PAGERDUTY_SERVICE_ID", "").strip()
+        if service_id:
+            query = parse.urlencode(
+                {
+                    "statuses[]": ["triggered", "acknowledged"],
+                    "limit": 25,
+                    "query": context.service_name,
+                    "service_ids[]": [service_id],
+                },
+                doseq=True,
+            )
         url = f"{base_url}/incidents?{query}"
         headers = {
             "Authorization": f"Token token={token}",
@@ -85,6 +97,10 @@ class PagerDutyPlugin:
             service = incident.get("service")
             if isinstance(service, dict):
                 text += f" {service.get('summary', '')}".lower()
+                service_id_value = str(service.get("id", "")).strip()
+                if service_id and service_id_value and service_id_value == service_id:
+                    matching.append(incident)
+                    continue
             if needle in text:
                 matching.append(incident)
 
@@ -116,4 +132,3 @@ class PagerDutyPlugin:
             ],
             timeline_events=timeline_events,
         )
-
