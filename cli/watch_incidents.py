@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -38,9 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Polling interval in seconds",
     )
     parser.add_argument(
+        "--detect-and-notify",
+        action="store_true",
+        help="Run a single detection/notification cycle and exit.",
+    )
+    parser.add_argument(
         "--once",
         action="store_true",
-        help="Run one iteration and exit",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--plugin-config",
@@ -60,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=PROJECT_ROOT / "state" / "alerts.json",
         help="Path to notification state file",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry-run cloud collectors: print what would be fetched without making cloud API calls.",
+    )
     return parser
 
 
@@ -67,11 +78,18 @@ def main(argv: list[str] | None = None) -> int:
     """Run incident watch mode."""
     load_local_env(PROJECT_ROOT)
     args = build_parser().parse_args(argv)
+    if args.once and not args.detect_and_notify:
+        warnings.warn("--once is deprecated; use --detect-and-notify.", stacklevel=2)
+    if args.dry_run:
+        import os
+
+        os.environ["PLUGIN_DRY_RUN"] = "1"
+    run_once = args.detect_and_notify or args.once
     results = run_watch_loop(
         incidents=args.incidents,
         datasets_root=args.datasets_root,
         interval_seconds=args.interval_seconds,
-        once=args.once,
+        once=run_once,
         plugin_config_path=args.plugin_config,
         routing_config_path=args.routing_config,
         state_path=args.state_path,
