@@ -32,16 +32,36 @@ def create_mcp_app(datasets_root: Path | None = None):
         ) from exc
 
     app = FastMCP("infra-sherlock")
-    report_cache: dict[str, dict[str, Any]] = {}
+    report_cache: dict[tuple[str, str, str, str], dict[str, Any]] = {}
 
-    def _get_or_build_payload(incident_name: str) -> dict[str, Any]:
-        cached = report_cache.get(incident_name)
+    def _get_or_build_payload(
+        incident_name: str,
+        mode: str = "local",
+        service_name: str | None = None,
+        incident_title: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_mode = mode.strip().lower()
+        if normalized_mode not in {"local", "cloud"}:
+            raise ValueError("mode must be either 'local' or 'cloud'")
+        if normalized_mode == "cloud" and not (service_name and service_name.strip()):
+            raise ValueError("service_name is required when mode='cloud'")
+
+        cache_key = (
+            incident_name,
+            normalized_mode,
+            (service_name or "").strip(),
+            (incident_title or "").strip(),
+        )
+        cached = report_cache.get(cache_key)
         if cached is not None:
             return cached
 
         report = investigate_incident(
             incident_name=incident_name,
             datasets_root=datasets_root,
+            investigation_mode=normalized_mode,
+            service_name=(service_name or None),
+            incident_title=(incident_title or None),
         )
         payload = {
             "incident_name": report.incident_name,
@@ -61,30 +81,60 @@ def create_mcp_app(datasets_root: Path | None = None):
             "suggested_remediation": report.suggested_remediation,
             "next_investigative_steps": report.next_investigative_steps,
         }
-        report_cache[incident_name] = payload
+        report_cache[cache_key] = payload
         return payload
 
     @app.tool(
         name="investigate_incident",
         description="Investigate an incident and return a structured report.",
     )
-    def investigate_incident_tool(incident_name: str) -> dict[str, Any]:
-        return _get_or_build_payload(incident_name)
+    def investigate_incident_tool(
+        incident_name: str,
+        mode: str = "local",
+        service_name: str | None = None,
+        incident_title: str | None = None,
+    ) -> dict[str, Any]:
+        return _get_or_build_payload(
+            incident_name=incident_name,
+            mode=mode,
+            service_name=service_name,
+            incident_title=incident_title,
+        )
 
     @app.tool(
         name="get_incident_timeline",
         description="Return timeline entries for a specific incident.",
     )
-    def get_incident_timeline(incident_name: str) -> list[dict[str, Any]]:
-        payload = _get_or_build_payload(incident_name)
+    def get_incident_timeline(
+        incident_name: str,
+        mode: str = "local",
+        service_name: str | None = None,
+        incident_title: str | None = None,
+    ) -> list[dict[str, Any]]:
+        payload = _get_or_build_payload(
+            incident_name=incident_name,
+            mode=mode,
+            service_name=service_name,
+            incident_title=incident_title,
+        )
         return _extract_timeline(payload)
 
     @app.tool(
         name="get_incident_remediation",
         description="Return suggested remediation steps for a specific incident.",
     )
-    def get_incident_remediation(incident_name: str) -> list[str]:
-        payload = _get_or_build_payload(incident_name)
+    def get_incident_remediation(
+        incident_name: str,
+        mode: str = "local",
+        service_name: str | None = None,
+        incident_title: str | None = None,
+    ) -> list[str]:
+        payload = _get_or_build_payload(
+            incident_name=incident_name,
+            mode=mode,
+            service_name=service_name,
+            incident_title=incident_title,
+        )
         return _extract_remediation(payload)
 
     return app
