@@ -139,6 +139,10 @@ Local mode is retained for testing only and is intentionally not the primary pro
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+# optional for cloud collectors:
+pip install -r requirements-cloud.txt
+# optional for local development/testing:
+pip install -r requirements-dev.txt
 ```
 
 Environment setup:
