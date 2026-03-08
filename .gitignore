@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 .env
 reports/
+.DS_Store
+datasets/.DS_Store
+incident_agent/.DS_Store

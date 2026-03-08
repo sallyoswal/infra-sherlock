@@ -1,11 +1,15 @@
-# local = no external APIs; cloud = enable configured plugins.
-mode: local
+# local = fixture/testing mode; cloud = production collectors/notifiers.
+mode: cloud
 
 # Optional collectors (used only when mode=cloud): aws_cloudwatch, datadog, pagerduty
-collectors: []
+collectors:
+  - aws_cloudwatch
+  - datadog
+  - pagerduty
 
 # Optional notifiers (used only when mode=cloud): slack
-notifiers: []
+notifiers:
+  - slack
 
 # Soft guardrail for future collector calls.
 max_api_calls_per_run: 20

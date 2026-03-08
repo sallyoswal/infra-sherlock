@@ -6,10 +6,10 @@ It correlates cloud telemetry, change signals, and ownership routes, then produc
 
 ## Why It Matters
 
-Infra Sherlock is built for two explicit operating modes:
+Infra Sherlock is built for two operating modes:
 
 - `cloud` mode: production path using configured collectors/notifiers (no dataset dependency)
-- `local` mode: test path using local incident fixtures
+- `local` mode: test path for fixture-backed development only
 
 Core capabilities:
 
@@ -17,27 +17,6 @@ Core capabilities:
 - Produces structured root-cause reports with confidence and timeline
 - Supports OpenAI/OpenRouter provider configuration
 - Sends optional Slack notifications with dedupe
-
-## Chat Usage
-
-Run interactive chat:
-
-```bash
-python cli/chat_agent.py payments_db_timeout
-```
-
-`chat_agent.py` runs in AI-only mode and requires LLM credentials in `.env`.
-
-Built-in chat shortcuts:
-
-- `/summary`
-- `/root`
-- `/timeline`
-- `/evidence`
-- `/remediation`
-- `/help`
-- `/exit`
-- `/export <file.md>`
 
 ## CLI Commands
 
@@ -51,12 +30,6 @@ Cloud dry-run investigation (no cloud API calls):
 
 ```bash
 PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
-```
-
-Local fixture investigation (test/dev path):
-
-```bash
-python cli/run_agent.py investigate payments_db_timeout --mode local
 ```
 
 Major-incident triage:
@@ -161,26 +134,7 @@ flowchart TD
     K --> L[Incident Channel: likely cause + evidence + next actions]
 ```
 
-Local / test flow (non-production):
-
-```mermaid
-flowchart TD
-    A[CLI: run_agent.py / chat_agent.py / watch_incidents.py] --> B[Agent Orchestrator]
-    B --> C[logs_tool.py]
-    B --> D[metrics_tool.py]
-    B --> E[deploy_tool.py]
-    B --> F[infra_tool.py]
-    C --> G[Deterministic Reasoner]
-    D --> G
-    E --> G
-    F --> G
-    G --> H[IncidentReport]
-    B --> I[Optional LLM Reasoner / Chat]
-    I --> H
-    B --> J[Optional Plugin Registry]
-    J --> K[AWS/Datadog Collectors]
-    J --> L[Slack Notifier]
-```
+Local mode is retained for testing only and is intentionally not the primary production path.
 
 ## Repository Layout
 
@@ -205,20 +159,14 @@ flowchart TD
 ├── config/
 │   ├── plugins.yaml
 │   └── routing.yaml
-├── datasets/
-│   └── incidents/
-│       ├── payments_db_timeout/
-│       └── deploy_regression/
-├── datasets/
-│   └── major_incidents/
-│       └── payments_sev1_march_2026/
-│           ├── incident_group.json
-│           ├── services.json
-│           ├── infrastructure.json
-│           ├── change_events.json
-│           ├── failure_patterns.json
-│           ├── child_incidents/
-│           └── evidence/
+├── integrations/
+│   ├── aws/
+│   ├── cloudtrail/
+│   ├── datadog/
+│   ├── pagerduty/
+│   ├── pull_requests/
+│   └── terraform/
+├── datasets/                  # optional fixture data for local testing only
 ├── incident_agent/
 │   ├── agent.py
 │   ├── chat.py
@@ -265,8 +213,10 @@ Enable cloud plugins (production mode):
 
 ```bash
 python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
-python cli/run_agent.py investigate <fixture-name> --mode local
 ```
+
+Use `integrations/` folders to store organization-specific adapters, field mappings,
+query templates, and change-source contracts.
 
 Routing setup for ownership + Slack channels:
 
