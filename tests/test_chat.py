@@ -38,15 +38,34 @@ class _FakeClient:
         self.chat = _FakeChat()
 
 
-def test_create_chat_session_uses_local_incident_context() -> None:
+def _fake_report() -> IncidentReport:
+    return IncidentReport(
+        incident_name="payments_db_timeout",
+        incident_title="Payments API timeout spike after network policy change",
+        service_name="payments-api",
+        likely_root_cause="Synthetic cause",
+        confidence=0.5,
+        key_evidence=["e1"],
+        timeline=[TimelineEvent(timestamp="2026-03-08T10:00:00Z", event="x", source="plugin")],
+        suggested_remediation=["r1"],
+        next_investigative_steps=["n1"],
+    )
+
+
+def test_create_chat_session_uses_local_incident_context(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("incident_agent.chat.investigate_incident", lambda **kwargs: _fake_report())
     session = create_chat_session("payments_db_timeout")
     assert session.report.incident_name == "payments_db_timeout"
     assert session.history == []
+    assert session.report_json
 
 
 def test_ask_incident_question_returns_answer_and_updates_history(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("incident_agent.chat.investigate_incident", lambda **kwargs: _fake_report())
     session = create_chat_session("payments_db_timeout")
     answer = ask_incident_question(
         session=session,
@@ -75,17 +94,7 @@ def test_create_chat_session_supports_cloud_mode_args(monkeypatch) -> None:
 
     def _fake_investigate_incident(**kwargs):
         captured.update(kwargs)
-        return IncidentReport(
-            incident_name="prod-incident-1",
-            incident_title="Cloud incident: prod-incident-1",
-            service_name="payments-api",
-            likely_root_cause="Synthetic cause",
-            confidence=0.5,
-            key_evidence=["e1"],
-            timeline=[TimelineEvent(timestamp="2026-03-08T10:00:00Z", event="x", source="plugin")],
-            suggested_remediation=["r1"],
-            next_investigative_steps=["n1"],
-        )
+        return _fake_report()
 
     monkeypatch.setattr("incident_agent.chat.investigate_incident", _fake_investigate_incident)
     session = create_chat_session(
@@ -95,7 +104,8 @@ def test_create_chat_session_supports_cloud_mode_args(monkeypatch) -> None:
         service_name="payments-api",
         incident_title="PD #123",
     )
-    assert session.report.incident_name == "prod-incident-1"
+    assert session.report.incident_name == "payments_db_timeout"
     assert captured["investigation_mode"] == "cloud"
+    assert captured["incident_name"] == "prod-incident-1"
     assert captured["service_name"] == "payments-api"
     assert captured["incident_title"] == "PD #123"

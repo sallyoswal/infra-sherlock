@@ -27,7 +27,11 @@ class IncidentChatSession:
     """In-memory chat session bound to a single incident report context."""
 
     report: IncidentReport
+    report_json: str = field(init=False)
     history: list[dict[str, str]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.report_json = json.dumps(asdict(self.report), sort_keys=True)
 
 
 def create_chat_session(
@@ -72,7 +76,6 @@ def ask_incident_question(
         except ValueError as exc:
             raise IncidentChatError(str(exc)) from exc
 
-    report_json = json.dumps(asdict(session.report), sort_keys=True)
     messages = [
         {
             "role": "system",
@@ -80,7 +83,7 @@ def ask_incident_question(
                 "You are an SRE incident assistant. Answer only using the provided incident report. "
                 "If data is missing, explicitly say what is unknown and what to verify next. "
                 "Prefer concise, operator-friendly responses. "
-                f"Incident report context (JSON): {report_json}"
+                f"Incident report context (JSON): {session.report_json}"
             ),
         },
         {

@@ -4,12 +4,26 @@ from pathlib import Path
 
 import cli.chat_agent as chat_agent
 from cli.chat_agent import handle_slash_command
-from incident_agent.agent import investigate_incident
-from incident_agent.chat import create_chat_session
+from incident_agent.chat import IncidentChatSession
+from incident_agent.models import IncidentReport, TimelineEvent
+
+
+def _fake_report() -> IncidentReport:
+    return IncidentReport(
+        incident_name="payments_db_timeout",
+        incident_title="Payments API timeout spike after network policy change",
+        service_name="payments-api",
+        likely_root_cause="Network policy change restricted DB access",
+        confidence=0.87,
+        key_evidence=["DB timeouts observed", "High-risk infra change"],
+        timeline=[TimelineEvent(timestamp="2026-03-06T10:00:00Z", event="Error spike", source="metrics")],
+        suggested_remediation=["Rollback network change"],
+        next_investigative_steps=["Check DB connection stats"],
+    )
 
 
 def test_slash_summary_contains_core_fields() -> None:
-    report = investigate_incident("payments_db_timeout")
+    report = _fake_report()
     output = handle_slash_command("/summary", report)
 
     assert "summarize this incident" in output.lower()
@@ -17,7 +31,7 @@ def test_slash_summary_contains_core_fields() -> None:
 
 
 def test_slash_timeline_formats_entries() -> None:
-    report = investigate_incident("payments_db_timeout")
+    report = _fake_report()
     output = handle_slash_command("/timeline", report)
 
     assert "timeline" in output.lower()
@@ -25,14 +39,14 @@ def test_slash_timeline_formats_entries() -> None:
 
 
 def test_slash_help_returns_command_list() -> None:
-    report = investigate_incident("payments_db_timeout")
+    report = _fake_report()
     output = handle_slash_command("/help", report)
     assert "/summary" in output
     assert "/root" in output
 
 
 def test_slash_export_writes_markdown(tmp_path: Path) -> None:
-    report = investigate_incident("payments_db_timeout")
+    report = _fake_report()
     target = tmp_path / "chat-export.md"
 
     output = handle_slash_command(f"/export {target}", report)
@@ -40,11 +54,12 @@ def test_slash_export_writes_markdown(tmp_path: Path) -> None:
     assert target.exists()
     assert "Exported report to:" in output
     content = target.read_text(encoding="utf-8")
-    assert "# Payments API timeout spike after network policy change" in content
+    assert content.startswith("#")
+    assert report.incident_title in content
 
 
 def test_free_text_question_routes_to_llm(monkeypatch) -> None:
-    session = create_chat_session("payments_db_timeout")
+    session = IncidentChatSession(report=_fake_report())
     calls: list[str] = []
 
     monkeypatch.setattr(chat_agent, "has_llm_credentials", lambda: True)
