@@ -34,7 +34,10 @@ class NotificationStateStore:
                         continue
                     if isinstance(value, dict):
                         fingerprint = str(value.get("fingerprint", "")).strip()
-                        sent_at = int(value.get("sent_at", now))
+                        try:
+                            sent_at = int(value.get("sent_at", now))
+                        except (TypeError, ValueError):
+                            sent_at = now
                         if fingerprint:
                             normalized[incident_key] = {
                                 "fingerprint": fingerprint,
@@ -56,7 +59,10 @@ class NotificationStateStore:
         now = int(time.time())
         kept: dict[str, dict[str, object]] = {}
         for incident_key, entry in data.items():
-            sent_at = int(entry.get("sent_at", now))
+            try:
+                sent_at = int(entry.get("sent_at", now))
+            except (TypeError, ValueError):
+                sent_at = now
             if now - sent_at <= self.ttl_seconds:
                 kept[incident_key] = entry
         return kept

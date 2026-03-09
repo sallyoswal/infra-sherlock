@@ -32,16 +32,18 @@ Cloud dry-run investigation (no cloud API calls):
 PLUGIN_DRY_RUN=1 python cli/run_agent.py investigate <incident-id> --mode cloud --service-name <service>
 ```
 
+Note: dry-run validates collector wiring only. If no actionable evidence is returned, investigation exits with an evidence guard error.
+
 AI-first watch mode (detect -> diagnose -> notify):
 
 ```bash
-python cli/watch_incidents.py <incident-id> --detect-and-notify
+python cli/watch_incidents.py <incident-id> --mode cloud --service-name <service> --detect-and-notify
 ```
 
 Dry-run cloud collection preview (no cloud API calls):
 
 ```bash
-python cli/watch_incidents.py <incident-id> --detect-and-notify --dry-run
+python cli/watch_incidents.py <incident-id> --mode cloud --service-name <service> --detect-and-notify --dry-run
 ```
 
 In production, `incident-id` is typically sourced from your alerting/event system

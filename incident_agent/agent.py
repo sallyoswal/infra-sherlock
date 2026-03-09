@@ -118,18 +118,8 @@ def investigate_incident(
             infra=infra,
         )
 
-        collectors = build_collectors(plugin_cfg)
-        context = IncidentContext(
-            incident_name=incident_name,
-            service_name=metadata.service_name,
-            incident_dir=target_dir,
-        )
-        plugin_evidence = _collect_plugin_evidence(
-            collectors,
-            context,
-            max_calls=plugin_cfg.max_api_calls_per_run,
-        )
-        _merge_plugin_evidence(report, plugin_evidence)
+        # Keep local mode fixture-only and avoid mixing cloud plugin evidence.
+        plugin_cfg.mode = "local"
 
     if notify:
         _notify_if_needed(

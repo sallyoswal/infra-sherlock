@@ -34,7 +34,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     if yaml is None:
-        return {}
+        raise IncidentDataError("PyYAML is required to load plugin config. Install with: pip install PyYAML")
     content = yaml.safe_load(path.read_text(encoding="utf-8"))
     if content is None:
         return {}
