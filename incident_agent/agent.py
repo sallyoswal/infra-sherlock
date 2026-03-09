@@ -170,8 +170,9 @@ def _analyses_from_plugin_evidence(
         points=[],
         error_rate_rising=error_events > 0,
         latency_rising=timeout_events > 0,
-        peak_error_rate=float(error_events),
-        peak_p95_latency_ms=float(timeout_events * 100),
+        # In cloud mode we may not have real metric series; keep unknown values neutral.
+        peak_error_rate=0.0,
+        peak_p95_latency_ms=0.0,
     )
     deploys = DeployAnalysis(records=[], latest_deploy=None)
     infra = InfraAnalysis(changes=[], latest_change=None, high_risk_changes=[])

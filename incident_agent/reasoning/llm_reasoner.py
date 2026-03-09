@@ -103,6 +103,33 @@ def _evidence_payload(
             "details": infra.latest_change.details,
         }
 
+    metrics_payload: dict[str, Any] = {
+        "error_rate_rising": metrics.error_rate_rising,
+        "latency_rising": metrics.latency_rising,
+    }
+    if metrics.points:
+        metrics_payload.update(
+            {
+                "metrics_unavailable": False,
+                "peak_error_rate": metrics.peak_error_rate,
+                "peak_p95_latency_ms": metrics.peak_p95_latency_ms,
+                "latest_point": {
+                    "timestamp": metrics.points[-1].timestamp,
+                    "error_rate": metrics.points[-1].error_rate,
+                    "p95_latency_ms": metrics.points[-1].p95_latency_ms,
+                },
+            }
+        )
+    else:
+        metrics_payload.update(
+            {
+                "metrics_unavailable": True,
+                "peak_error_rate": None,
+                "peak_p95_latency_ms": None,
+                "latest_point": None,
+            }
+        )
+
     return {
         "incident_name": metadata.incident_name,
         "incident_title": metadata.title,
@@ -115,19 +142,7 @@ def _evidence_payload(
             "last_timestamp": logs.last_timestamp,
             "sample_timeout_messages": logs.sample_timeout_messages,
         },
-        "metrics": {
-            "error_rate_rising": metrics.error_rate_rising,
-            "latency_rising": metrics.latency_rising,
-            "peak_error_rate": metrics.peak_error_rate,
-            "peak_p95_latency_ms": metrics.peak_p95_latency_ms,
-            "latest_point": {
-                "timestamp": metrics.points[-1].timestamp,
-                "error_rate": metrics.points[-1].error_rate,
-                "p95_latency_ms": metrics.points[-1].p95_latency_ms,
-            }
-            if metrics.points
-            else None,
-        },
+        "metrics": metrics_payload,
         "deploys": {
             "latest_deploy": latest_deploy,
             "count": len(deploys.records),
