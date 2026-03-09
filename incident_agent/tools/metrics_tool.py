@@ -32,13 +32,19 @@ def analyze_metrics(metrics_path: Path) -> MetricsAnalysis:
     if not points:
         raise MetricsToolError(f"No metric rows found in {metrics_path}")
 
-    error_rate_rising = points[-1].error_rate > points[0].error_rate
-    latency_rising = points[-1].p95_latency_ms > points[0].p95_latency_ms
+    baseline_error_rate = points[0].error_rate
+    baseline_latency = points[0].p95_latency_ms
+    peak_error_rate = max(p.error_rate for p in points)
+    peak_p95_latency_ms = max(p.p95_latency_ms for p in points)
+
+    # Detect incident spikes, including spike-and-recover patterns.
+    error_rate_rising = peak_error_rate > baseline_error_rate * 1.5
+    latency_rising = peak_p95_latency_ms > baseline_latency * 1.5
 
     return MetricsAnalysis(
         points=points,
         error_rate_rising=error_rate_rising,
         latency_rising=latency_rising,
-        peak_error_rate=max(p.error_rate for p in points),
-        peak_p95_latency_ms=max(p.p95_latency_ms for p in points),
+        peak_error_rate=peak_error_rate,
+        peak_p95_latency_ms=peak_p95_latency_ms,
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import warnings
 from pathlib import Path
 
@@ -16,3 +17,14 @@ def test_load_local_env_warns_when_missing(tmp_path: Path) -> None:
 
     assert records
     assert ".env file not found" in str(records[0].message)
+
+
+def test_load_local_env_strips_inline_comments(tmp_path: Path) -> None:
+    project_root = tmp_path / "repo"
+    project_root.mkdir(parents=True)
+    env_path = project_root / ".env"
+    env_path.write_text("TEST_INLINE=value # comment\n", encoding="utf-8")
+
+    os.environ.pop("TEST_INLINE", None)
+    load_local_env(project_root)
+    assert os.environ.get("TEST_INLINE") == "value"

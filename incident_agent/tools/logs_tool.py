@@ -24,6 +24,7 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
     last_ts: str | None = None
     timeout_samples: list[str] = []
     timeline_events: list[LogEvent] = []
+    malformed = 0
 
     for raw_line in logs_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -31,8 +32,9 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise LogsToolError(f"Malformed JSONL entry in {logs_path}: {exc}") from exc
+        except json.JSONDecodeError:
+            malformed += 1
+            continue
 
         total_events += 1
         ts = str(payload.get("timestamp", ""))
@@ -60,6 +62,9 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
             or ("deploy" in lowered and "completed" in lowered)
         ):
             timeline_events.append(LogEvent(timestamp=ts, level=level, message=message))
+
+    if total_events == 0 and malformed > 0:
+        raise LogsToolError(f"All log entries malformed in {logs_path}")
 
     return LogAnalysis(
         total_events=total_events,
