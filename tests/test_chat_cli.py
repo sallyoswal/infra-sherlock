@@ -48,7 +48,7 @@ def test_free_text_question_routes_to_llm(monkeypatch) -> None:
     calls: list[str] = []
 
     monkeypatch.setattr(chat_agent, "has_llm_credentials", lambda: True)
-    monkeypatch.setattr(chat_agent, "create_chat_session", lambda incident_name, datasets_root: session)
+    monkeypatch.setattr(chat_agent, "create_chat_session", lambda **kwargs: session)
     monkeypatch.setattr(chat_agent, "ask_incident_question", lambda **kwargs: calls.append(kwargs["question"]) or "ok")
 
     inputs = iter(["what happened explain to me like a child", "/exit"])
@@ -66,3 +66,9 @@ def test_chat_requires_llm_credentials(monkeypatch) -> None:
 
     code = chat_agent.main(["payments_db_timeout"])
     assert code == 3
+
+
+def test_chat_cloud_mode_requires_service_name(monkeypatch) -> None:
+    monkeypatch.setattr(chat_agent, "has_llm_credentials", lambda: True)
+    code = chat_agent.main(["prod-incident-1", "--mode", "cloud"])
+    assert code == 2

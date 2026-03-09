@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from incident_agent.chat import IncidentChatError, ask_incident_question, create_chat_session
+from incident_agent.models import IncidentReport, TimelineEvent
 
 
 class _FakeMessage:
@@ -63,3 +66,36 @@ def test_ask_incident_question_requires_api_key(monkeypatch) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(IncidentChatError):
         create_chat_session("payments_db_timeout")
+
+
+def test_create_chat_session_supports_cloud_mode_args(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    def _fake_investigate_incident(**kwargs):
+        captured.update(kwargs)
+        return IncidentReport(
+            incident_name="prod-incident-1",
+            incident_title="Cloud incident: prod-incident-1",
+            service_name="payments-api",
+            likely_root_cause="Synthetic cause",
+            confidence=0.5,
+            key_evidence=["e1"],
+            timeline=[TimelineEvent(timestamp="2026-03-08T10:00:00Z", event="x", source="plugin")],
+            suggested_remediation=["r1"],
+            next_investigative_steps=["n1"],
+        )
+
+    monkeypatch.setattr("incident_agent.chat.investigate_incident", _fake_investigate_incident)
+    session = create_chat_session(
+        incident_name="prod-incident-1",
+        datasets_root=Path("."),
+        investigation_mode="cloud",
+        service_name="payments-api",
+        incident_title="PD #123",
+    )
+    assert session.report.incident_name == "prod-incident-1"
+    assert captured["investigation_mode"] == "cloud"
+    assert captured["service_name"] == "payments-api"
+    assert captured["incident_title"] == "PD #123"

@@ -28,6 +28,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="infra-sherlock-chat")
     parser.add_argument("incident_name", help="Incident scenario name")
     parser.add_argument(
+        "--mode",
+        choices=["local", "cloud"],
+        default="local",
+        help="Chat mode: local reads fixture datasets; cloud uses configured collectors only.",
+    )
+    parser.add_argument(
+        "--service-name",
+        type=str,
+        default=None,
+        help="Required in cloud mode: service identifier used by cloud collectors.",
+    )
+    parser.add_argument(
+        "--incident-title",
+        type=str,
+        default=None,
+        help="Optional in cloud mode: incident title override for generated reports.",
+    )
+    parser.add_argument(
         "--datasets-root",
         type=Path,
         default=Path(__file__).resolve().parents[1] / "datasets" / "incidents",
@@ -77,11 +95,17 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 3
+    if args.mode == "cloud" and not args.service_name:
+        print("Error: --service-name is required when --mode cloud", file=sys.stderr)
+        return 2
 
     try:
         session = create_chat_session(
             incident_name=args.incident_name,
             datasets_root=args.datasets_root,
+            investigation_mode=args.mode,
+            service_name=args.service_name,
+            incident_title=args.incident_title,
         )
     except (IncidentDataError, IncidentChatError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

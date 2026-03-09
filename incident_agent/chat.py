@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from incident_agent.agent import investigate_incident
 from incident_agent.llm_provider import (
@@ -33,6 +33,9 @@ class IncidentChatSession:
 def create_chat_session(
     incident_name: str,
     datasets_root: Path | None = None,
+    investigation_mode: Literal["local", "cloud"] = "local",
+    service_name: str | None = None,
+    incident_title: str | None = None,
 ) -> IncidentChatSession:
     """Build chat context from an AI-generated incident report."""
     if not has_llm_credentials():
@@ -40,6 +43,9 @@ def create_chat_session(
     report = investigate_incident(
         incident_name=incident_name,
         datasets_root=datasets_root,
+        investigation_mode=investigation_mode,
+        service_name=service_name,
+        incident_title=incident_title,
     )
     return IncidentChatSession(report=report)
 
