@@ -123,14 +123,14 @@ def build_report(
 
     remediation = [
         "Rollback or adjust the recent high-risk network/security change affecting DB connectivity.",
-        "Temporarily increase DB client timeout and add bounded retry with jitter in the payments service.",
+        f"Temporarily increase DB client timeout and add bounded retry with jitter in the {metadata.service_name} service.",
         "Re-run canary health checks and monitor error/latency for at least 30 minutes after mitigation.",
     ]
 
     next_steps = [
         "Validate database connection success rate by source subnet and security group before/after change.",
         "Compare slow query and connection pool stats during incident window.",
-        "Add synthetic transaction checks for payments->DB path to catch regressions earlier.",
+        f"Add synthetic transaction checks for {metadata.service_name}->DB path to catch regressions earlier.",
     ]
 
     return IncidentReport(

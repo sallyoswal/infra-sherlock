@@ -70,9 +70,6 @@ def _top_timeline_events(report: IncidentReport) -> list[TimelineEvent]:
         if item and item not in selected:
             selected.append(item)
 
-    if not selected:
-        selected = report.timeline[:3]
-
     return sorted(selected, key=lambda e: e.timestamp)
 
 
