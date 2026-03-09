@@ -15,7 +15,6 @@ from incident_agent.reasoning.llm_reasoner import (
 from incident_agent.tools.deploy_tool import analyze_deploys
 from incident_agent.tools.infra_tool import analyze_infra_changes
 from incident_agent.tools.logs_tool import analyze_logs
-from incident_agent.tools.metrics_tool import analyze_metrics
 
 DATASETS_ROOT = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
 
