@@ -21,14 +21,17 @@ def analyze_deploys(deploys_path: Path) -> DeployAnalysis:
     if not isinstance(payload, list):
         raise DeployToolError(f"Expected list in deploy history file: {deploys_path}")
 
-    records = [
-        DeployRecord(
-            timestamp=item["timestamp"],
-            version=item["version"],
-            service=item["service"],
-            notes=item.get("notes", ""),
-        )
-        for item in payload
-    ]
+    try:
+        records = [
+            DeployRecord(
+                timestamp=item["timestamp"],
+                version=item["version"],
+                service=item["service"],
+                notes=item.get("notes", ""),
+            )
+            for item in payload
+        ]
+    except (KeyError, TypeError) as exc:
+        raise DeployToolError(f"Malformed deploy record in {deploys_path}: {exc}") from exc
     latest = max(records, key=lambda r: r.timestamp) if records else None
     return DeployAnalysis(records=records, latest_deploy=latest)

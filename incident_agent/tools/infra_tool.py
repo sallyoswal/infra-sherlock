@@ -21,16 +21,19 @@ def analyze_infra_changes(infra_path: Path) -> InfraAnalysis:
     if not isinstance(payload, list):
         raise InfraToolError(f"Expected list in infra change file: {infra_path}")
 
-    changes = [
-        InfraChange(
-            timestamp=item["timestamp"],
-            component=item["component"],
-            change_type=item["change_type"],
-            risk_level=item["risk_level"],
-            details=item.get("details", ""),
-        )
-        for item in payload
-    ]
+    try:
+        changes = [
+            InfraChange(
+                timestamp=item["timestamp"],
+                component=item["component"],
+                change_type=item["change_type"],
+                risk_level=item["risk_level"],
+                details=item.get("details", ""),
+            )
+            for item in payload
+        ]
+    except (KeyError, TypeError) as exc:
+        raise InfraToolError(f"Malformed infra change record in {infra_path}: {exc}") from exc
     latest = max(changes, key=lambda c: c.timestamp) if changes else None
     high_risk = [c for c in changes if c.risk_level.lower() == "high"]
     return InfraAnalysis(changes=changes, latest_change=latest, high_risk_changes=high_risk)
