@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 from incident_agent.agent import investigate_incident
+
+MAX_REPORT_CACHE_ENTRIES = 64
 
 
 def _extract_timeline(report_payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -32,7 +35,7 @@ def create_mcp_app(datasets_root: Path | None = None):
         ) from exc
 
     app = FastMCP("infra-sherlock")
-    report_cache: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    report_cache: OrderedDict[tuple[str, str, str, str], dict[str, Any]] = OrderedDict()
 
     def _get_or_build_payload(
         incident_name: str,
@@ -54,6 +57,7 @@ def create_mcp_app(datasets_root: Path | None = None):
         )
         cached = report_cache.get(cache_key)
         if cached is not None:
+            report_cache.move_to_end(cache_key)
             return cached
 
         report = investigate_incident(
@@ -82,6 +86,8 @@ def create_mcp_app(datasets_root: Path | None = None):
             "next_investigative_steps": report.next_investigative_steps,
         }
         report_cache[cache_key] = payload
+        if len(report_cache) > MAX_REPORT_CACHE_ENTRIES:
+            report_cache.popitem(last=False)
         return payload
 
     @app.tool(
