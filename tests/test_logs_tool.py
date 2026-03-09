@@ -5,9 +5,11 @@ import pytest
 from incident_agent.tools.logs_tool import analyze_logs
 from incident_agent.tools.logs_tool import LogsToolError
 
+DATASETS_ROOT = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
+
 
 def test_analyze_logs_extracts_timeout_signals() -> None:
-    logs_path = Path("datasets/incidents/payments_db_timeout/logs.jsonl")
+    logs_path = DATASETS_ROOT / "payments_db_timeout" / "logs.jsonl"
     result = analyze_logs(logs_path)
 
     assert result.total_events >= 6
@@ -27,6 +29,7 @@ def test_analyze_logs_skips_malformed_lines(tmp_path: Path) -> None:
     )
     result = analyze_logs(logs_path)
     assert result.total_events == 1
+    assert result.error_events == 1
     assert result.db_timeout_events == 1
 
 

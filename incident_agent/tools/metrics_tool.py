@@ -21,13 +21,16 @@ def analyze_metrics(metrics_path: Path) -> MetricsAnalysis:
     with metrics_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            points.append(
-                MetricPoint(
-                    timestamp=row["timestamp"],
-                    error_rate=float(row["error_rate"]),
-                    p95_latency_ms=float(row["p95_latency_ms"]),
+            try:
+                points.append(
+                    MetricPoint(
+                        timestamp=row["timestamp"],
+                        error_rate=float(row["error_rate"]),
+                        p95_latency_ms=float(row["p95_latency_ms"]),
+                    )
                 )
-            )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise MetricsToolError(f"Malformed metric row in {metrics_path}: {exc}") from exc
 
     if not points:
         raise MetricsToolError(f"No metric rows found in {metrics_path}")

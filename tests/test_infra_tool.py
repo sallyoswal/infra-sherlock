@@ -5,9 +5,11 @@ import pytest
 from incident_agent.tools.infra_tool import analyze_infra_changes
 from incident_agent.tools.infra_tool import InfraToolError
 
+DATASETS_ROOT = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
+
 
 def test_analyze_infra_changes_finds_high_risk_items() -> None:
-    infra_path = Path("datasets/incidents/payments_db_timeout/infra_changes.json")
+    infra_path = DATASETS_ROOT / "payments_db_timeout" / "infra_changes.json"
     result = analyze_infra_changes(infra_path)
 
     assert result.latest_change is not None

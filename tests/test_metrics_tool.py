@@ -1,10 +1,15 @@
 from pathlib import Path
 
+import pytest
+
 from incident_agent.tools.metrics_tool import analyze_metrics
+from incident_agent.tools.metrics_tool import MetricsToolError
+
+DATASETS_ROOT = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
 
 
 def test_analyze_metrics_detects_rising_error_and_latency() -> None:
-    metrics_path = Path("datasets/incidents/payments_db_timeout/metrics.csv")
+    metrics_path = DATASETS_ROOT / "payments_db_timeout" / "metrics.csv"
     result = analyze_metrics(metrics_path)
 
     assert result.error_rate_rising is True
@@ -26,3 +31,15 @@ def test_analyze_metrics_detects_spike_and_recover_as_rising(tmp_path: Path) -> 
     result = analyze_metrics(metrics_path)
     assert result.error_rate_rising is True
     assert result.latency_rising is True
+
+
+def test_analyze_metrics_raises_tool_error_on_malformed_row(tmp_path: Path) -> None:
+    metrics_path = tmp_path / "metrics.csv"
+    metrics_path.write_text(
+        "timestamp,error_rate,p95_latency_ms\n"
+        "2026-03-06T09:00:00Z,not-a-number,100\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(MetricsToolError, match="Malformed metric row"):
+        analyze_metrics(metrics_path)

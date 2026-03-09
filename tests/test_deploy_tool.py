@@ -5,9 +5,11 @@ import pytest
 from incident_agent.tools.deploy_tool import analyze_deploys
 from incident_agent.tools.deploy_tool import DeployToolError
 
+DATASETS_ROOT = Path(__file__).resolve().parents[1] / "datasets" / "incidents"
+
 
 def test_analyze_deploys_returns_latest_deploy() -> None:
-    deploy_path = Path("datasets/incidents/payments_db_timeout/deploy_history.json")
+    deploy_path = DATASETS_ROOT / "payments_db_timeout" / "deploy_history.json"
     result = analyze_deploys(deploy_path)
 
     assert result.latest_deploy is not None
