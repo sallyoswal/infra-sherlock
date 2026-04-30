@@ -35,6 +35,7 @@ def analyze_metrics(metrics_path: Path) -> MetricsAnalysis:
     if not points:
         raise MetricsToolError(f"No metric rows found in {metrics_path}")
 
+    points.sort(key=lambda p: p.timestamp)
     baseline_error_rate = points[0].error_rate
     baseline_latency = points[0].p95_latency_ms
     peak_error_rate = max(p.error_rate for p in points)
