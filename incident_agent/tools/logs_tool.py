@@ -37,14 +37,15 @@ def analyze_logs(logs_path: Path) -> LogAnalysis:
             continue
 
         total_events += 1
-        ts = str(payload.get("timestamp", ""))
+        ts = str(payload.get("timestamp", "")).strip()
         level = str(payload.get("level", "INFO")).upper()
         message = str(payload.get("message", ""))
 
-        if first_ts is None or ts < first_ts:
-            first_ts = ts
-        if last_ts is None or ts > last_ts:
-            last_ts = ts
+        if ts:
+            if first_ts is None or ts < first_ts:
+                first_ts = ts
+            if last_ts is None or ts > last_ts:
+                last_ts = ts
 
         if level in {"ERROR", "CRITICAL"}:
             error_events += 1
